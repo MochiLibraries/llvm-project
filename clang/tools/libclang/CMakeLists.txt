@@ -43,6 +43,7 @@ set(SOURCES
   Indexing.cpp
   FatalErrorHandler.cpp
   Rewrite.cpp
+  PathogenLayoutExtensions.cpp
 
   ADDITIONAL_HEADERS
   CIndexDiagnostic.h
