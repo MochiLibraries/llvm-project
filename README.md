@@ -9,6 +9,8 @@ The information provided for record layouts is largely based on the behavior of 
 
 The information provided for vtable layouts is somewhat based on the bahvior of the `-fdump-vtable-layouts` switch, but the implementation of this switch for Itanium and Microsoft ABIs is basically completely separate (the information provided by each isn't even consistent.) The codebase meant to be processed by this fork never has multiple inheritance or virtual bases, so it may be lacking in information in that department.
 
+This fork also provides a function `pathogen_Location_isFromMainFile`, which has slightly different behavior compared to `clang_Location_isFromMainFile`. (It uses `SourceManager::isInMainFile` instead of `SourceManager::isWrittenInMainFile`.) The main difference we care about is this function will consider locations from cursors that were expanded from macros in the main file to be in the main file.
+
 This fork isn't really ever meant to be merged into libclang proper. It's all contained in one file, the only modification to existing files is to add the new file to cmake. If someone wanted to adapt it to use proper formatting and and API shape to merge with libclang that'd be pretty cool. (However I find it unlikely they'd want to merge the vtable stuff unless it was modified to be more complete.)
 
 Our use case for this fork was for C# via [ClangSharp](https://github.com/microsoft/clangsharp), hence the lack of header file. The C# bindings are not included in this repo, but they can be provided upon request.
