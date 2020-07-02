@@ -626,6 +626,40 @@ PATHOGEN_EXPORT uint64_t pathogen_getEnumConstantDeclValueZeroExtended(CXCursor 
 }
 
 //-------------------------------------------------------------------------------------------------
+// Record arg passing kind
+//-------------------------------------------------------------------------------------------------
+
+enum class PathogenArgPassingKind
+{
+    CanPassInRegisters,
+    CannotPassInRegisters,
+    CanNeverPassInRegisters,
+    Invalid
+};
+
+#define verify_arg_passing_kind(PATHOGEN_KIND, CLANG_KIND) static_assert((int)(PathogenArgPassingKind:: ## PATHOGEN_KIND) == (int)(RecordDecl:: ## CLANG_KIND), #PATHOGEN_KIND " must match " #CLANG_KIND);
+verify_arg_passing_kind(CanPassInRegisters, APK_CanPassInRegs)
+verify_arg_passing_kind(CannotPassInRegisters, APK_CannotPassInRegs )
+verify_arg_passing_kind(CanNeverPassInRegisters, APK_CanNeverPassInRegs )
+
+PATHOGEN_EXPORT PathogenArgPassingKind pathogen_getArgPassingRestrictions(CXCursor cursor)
+{
+    
+    // The cursor must be a declaration
+    if (!clang_isDeclaration(cursor.kind))
+    {
+        return PathogenArgPassingKind::Invalid;
+    }
+
+    // Get the record declaration
+    const Decl* declaration = cxcursor::getCursorDecl(cursor);
+    const RecordDecl* record = dyn_cast_or_null<RecordDecl>(declaration);
+
+    // Return the value
+    return (PathogenArgPassingKind)record->getArgPassingRestrictions();
+}
+
+//-------------------------------------------------------------------------------------------------
 // Interop Verification
 //-------------------------------------------------------------------------------------------------
 
