@@ -2,7 +2,7 @@
 //
 // Pathogen Studios extensions to libclang: Layout info extensions
 // Provides functions for reading the memory and vtable layout of a type
-// (Amoung other things)
+// (Among other things)
 //
 // Useful references:
 // * lib/AST/RecordLayoutBuilder.cpp (Used for -fdump-record-layouts)
