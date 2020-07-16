@@ -432,11 +432,11 @@ PATHOGEN_EXPORT void pathogen_DeleteRecordLayout(PathogenRecordLayout* layout)
 //! * It is possible for the start and end locations for a cursor's extent to have different values.
 //! * Cursors which are the result of a macro expansion will be considered to be outside of the main file.
 //! These quirks are not good for our usecase of rejecting cursors from included files, so we provide this alternative.
-PATHOGEN_EXPORT int pathogen_Location_isFromMainFile(CXSourceLocation cxLocation)
+PATHOGEN_EXPORT interop_bool pathogen_Location_isFromMainFile(CXSourceLocation cxLocation)
 {
     const SourceLocation location = SourceLocation::getFromRawEncoding(cxLocation.int_data);
     if (location.isInvalid())
-    { return 0; }
+    { return false; }
 
     const SourceManager& sourceManager = *static_cast<const SourceManager*>(cxLocation.ptr_data[0]);
     return sourceManager.isInMainFile(location);
@@ -629,7 +629,7 @@ PATHOGEN_EXPORT uint64_t pathogen_getEnumConstantDeclValueZeroExtended(CXCursor 
 // Record arg passing kind
 //-------------------------------------------------------------------------------------------------
 
-enum class PathogenArgPassingKind
+enum class PathogenArgPassingKind : int32_t
 {
     CanPassInRegisters,
     CannotPassInRegisters,
