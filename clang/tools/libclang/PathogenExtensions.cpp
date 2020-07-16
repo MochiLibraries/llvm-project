@@ -1,6 +1,6 @@
 //===----------------------------------------------------------------------===//
 //
-// Pathogen Studios extensions to libclang: Layout info extensions
+// Pathogen Studios extensions to libclang
 // Provides functions for reading the memory and vtable layout of a type
 // (Among other things)
 //
