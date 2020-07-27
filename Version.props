@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <!--
+      LLVM doesn't have a nice, central, easily-parsable place with the version number.
+      (For example, look at the diff of 5852475e2c049ce29dcb1f0da3ac33035f8c9156)
+      This file is used by ClangSharp.Pathogen to get the version number.
+    -->
+    <LlvmBaseVersion>10.0.0</LlvmBaseVersion>
+  </PropertyGroup>
+</Project>
