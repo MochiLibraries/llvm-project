@@ -600,32 +600,6 @@ PATHOGEN_EXPORT PathogenOperatorOverloadInfo* pathogen_getOperatorOverloadInfo(C
 }
 
 //-------------------------------------------------------------------------------------------------
-// Getting the value of enum constants without sign-extending them
-//-------------------------------------------------------------------------------------------------
-
-PATHOGEN_EXPORT uint64_t pathogen_getEnumConstantDeclValueZeroExtended(CXCursor cursor)
-{
-    // The cursor must be a declaration
-    if (!clang_isDeclaration(cursor.kind))
-    {
-        return ULLONG_MAX;
-    }
-
-    // Get the enum constant declaration
-    const Decl* declaration = cxcursor::getCursorDecl(cursor);
-    const EnumConstantDecl* enumConstant = dyn_cast_or_null<EnumConstantDecl>(declaration);
-
-    // The cursor must be an enum constant declaration
-    if (enumConstant == nullptr)
-    {
-        return ULLONG_MAX;
-    }
-
-    // Return the value
-    return enumConstant->getInitVal().getZExtValue();
-}
-
-//-------------------------------------------------------------------------------------------------
 // Record arg passing kind
 //-------------------------------------------------------------------------------------------------
 
