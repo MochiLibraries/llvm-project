@@ -445,7 +445,6 @@ PATHOGEN_EXPORT interop_bool pathogen_Location_isFromMainFile(CXSourceLocation c
 //-------------------------------------------------------------------------------------------------
 // Operator overload helpers
 //-------------------------------------------------------------------------------------------------
-// Also not related to layout
 
 enum class PathogenOperatorOverloadKind : int32_t
 {
@@ -618,7 +617,6 @@ verify_arg_passing_kind(CanNeverPassInRegisters, APK_CanNeverPassInRegs )
 
 PATHOGEN_EXPORT PathogenArgPassingKind pathogen_getArgPassingRestrictions(CXCursor cursor)
 {
-    
     // The cursor must be a declaration
     if (!clang_isDeclaration(cursor.kind))
     {
