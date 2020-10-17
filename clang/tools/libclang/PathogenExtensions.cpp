@@ -632,6 +632,173 @@ PATHOGEN_EXPORT PathogenArgPassingKind pathogen_getArgPassingRestrictions(CXCurs
 }
 
 //-------------------------------------------------------------------------------------------------
+// Computing the constant value an expression of a variable's initializer
+//-------------------------------------------------------------------------------------------------
+
+enum class PathogenConstantValueKind : int
+{
+    Unknown,
+    NullPointer,
+    UnsignedInteger,
+    SignedInteger,
+    FloatingPoint,
+    String,
+};
+
+enum class PathogenStringConstantKind : int
+{
+    Ascii,
+    WideChar,
+    Utf8,
+    Utf16,
+    Utf32
+};
+static_assert((int)PathogenStringConstantKind::Ascii == StringLiteral::Ascii, "ASCII string kinds must match.");
+static_assert((int)PathogenStringConstantKind::WideChar == StringLiteral::Wide, "Wide character string kinds must match.");
+static_assert((int)PathogenStringConstantKind::Utf8 == StringLiteral::UTF8, "UTF8 string kinds must match.");
+static_assert((int)PathogenStringConstantKind::Utf16 == StringLiteral::UTF16, "UTF16 string kinds must match.");
+static_assert((int)PathogenStringConstantKind::Utf32 == StringLiteral::UTF32, "UTF32 string kinds must match.");
+
+struct PathogenConstantString
+{
+    uint64_t SizeBytes;
+    unsigned char FirstByte;
+};
+
+struct PathogenConstantValueInfo
+{
+    bool HasSideEffects;
+    bool HasUndefinedBehavior;
+    PathogenConstantValueKind Kind;
+    //! If Kind is UnsignedInteger, SignedInteger, or FloatingPointer: This is the size of the value in bits
+    //! If Kind is String: This is one of PathogenStringConstantKind
+    //! If Kind is Unknown, this is the Clang kind (APValue::ValueKind)
+    int SubKind;
+    //! The value of the constant
+    //! If Kind is NullPointer, this is 0
+    //! If Kind is UnsignedInteger, this is zero-extended
+    //! If Kind is SignedInteger, this is sign-extended
+    //! If Kind is FloatingPoint, this is the floating point value as bits and unused bits are 0
+    //! If Kind is String, this is a pointer to a PathogenConstantString representing the string
+    uint64_t Value;
+};
+static_assert(sizeof(PathogenConstantValueInfo::Value) >= sizeof(void*), "PathogenConstantValueInfo::Value must be able to hold a pointer.");
+
+//! Tries to compute the constant value of the specified variable declaration or expression
+//! Returns false if Clang could not determine the constant value of the specified cursor.
+//! Error is never set when this function returns true.
+PATHOGEN_EXPORT bool pathogen_ComputeConstantValue(CXCursor cursor, PathogenConstantValueInfo* info, const char** error)
+{
+    // Get the expression
+    const Expr* expression;
+
+    if (clang_isDeclaration(cursor.kind))
+    {
+        // Get the variable declaration
+        const Decl* declaration = cxcursor::getCursorDecl(cursor);
+        const VarDecl* variableDeclaration = dyn_cast_or_null<VarDecl>(declaration);
+
+        // The declaration cursor must be a variable declaration
+        if (variableDeclaration == nullptr)
+        {
+            *error = "The cursor is not a variable declaration or expression.";
+            return false;
+        }
+
+        // If the variable has no initializer, there's no value to get
+        if (!variableDeclaration->hasInit())
+        { return false; }
+
+        expression = variableDeclaration->getAnyInitializer();
+    }
+    else if (clang_isExpression(cursor.kind))
+    {
+        expression = cxcursor::getCursorExpr(cursor);
+    }
+    else
+    {
+        *error = "The cursor is not a variable declaration or expression.";
+        return false;
+    }
+
+    // Try and evaluate the constant
+    ASTContext& context = cxcursor::getCursorContext(cursor);
+    Expr::EvalResult result;
+    bool hasConstantValue = expression->EvaluateAsRValue(result, context);
+
+    if (!hasConstantValue)
+    {
+        if (result.Diag != nullptr && result.Diag->size() > 0)
+        { *error = "EvaluateAsRValue returned diagnostics."; }
+
+        return false;
+    }
+
+    memset(info, 0, sizeof(*info));
+    info->HasSideEffects = result.HasSideEffects;
+    info->HasUndefinedBehavior = result.HasUndefinedBehavior;
+
+    APValue value = result.Val;
+
+    // Default values to unknown, will be replaced by more specific type if possible.
+    info->Kind = PathogenConstantValueKind::Unknown;
+    info->SubKind = (int)value.getKind();
+    info->Value = 0;
+
+    if (value.isInt())
+    {
+        llvm::APSInt intValue = value.getInt();
+        info->Kind = intValue.isSigned() ? PathogenConstantValueKind::SignedInteger : PathogenConstantValueKind::UnsignedInteger;
+        info->SubKind = (int)intValue.getBitWidth();
+        info->Value = (uint64_t)intValue.getExtValue();
+    }
+    else if (value.isFloat())
+    {
+        llvm::APFloat floatValue = value.getFloat();
+        info->Kind = PathogenConstantValueKind::FloatingPoint;
+        info->SubKind = (int)floatValue.getSizeInBits(floatValue.getSemantics());
+        info->Value = floatValue.bitcastToAPInt().getZExtValue();
+    }
+    else if (value.isNullPointer())
+    {
+        info->Kind = PathogenConstantValueKind::NullPointer;
+        info->SubKind = 0;
+        info->Value = 0;
+    }
+    else if (value.isLValue())
+    {
+        APValue::LValueBase lValue = value.getLValueBase();
+
+        if (const Expr* lValueExpr = lValue.dyn_cast<const Expr*>())
+        {
+            if (lValueExpr->getStmtClass() == Stmt::StmtClass::StringLiteralClass)
+            {
+                const StringLiteral* stringLiteral = (const StringLiteral*)lValueExpr;
+                info->Kind = PathogenConstantValueKind::String;
+                info->SubKind = (int)stringLiteral->getKind();
+
+                PathogenConstantString* string = (PathogenConstantString*)malloc(sizeof(PathogenConstantString) + stringLiteral->getByteLength() - 1);
+                string->SizeBytes = stringLiteral->getByteLength();
+                memcpy(&string->FirstByte, stringLiteral->getBytes().data(), string->SizeBytes);
+                info->Value = (uint64_t)string;
+            }
+        }
+    }
+
+    return true;
+}
+
+//! Cleans up any extra memory allocated for the give constant value info.
+PATHOGEN_EXPORT void pathogen_DeletePathogenConstantValueInfo(PathogenConstantValueInfo* info)
+{
+    if (info && info->Kind == PathogenConstantValueKind::String && info->Value != 0)
+    {
+        free((void*)info->Value);
+        info->Value = 0;
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
 // Interop Verification
 //-------------------------------------------------------------------------------------------------
 
@@ -643,6 +810,8 @@ struct PathogenTypeSizes
     int PathogenVTable;
     int PathogenVTableEntry;
     int PathogenOperatorOverloadInfo;
+    int PathogenConstantString;
+    int PathogenConstantValueInfo;
 };
 
 //! Returns true if the sizes were populated, false if sizes->PathogenTypeSizes was invalid.
@@ -660,5 +829,7 @@ PATHOGEN_EXPORT interop_bool pathogen_GetTypeSizes(PathogenTypeSizes* sizes)
     sizes->PathogenVTable = sizeof(PathogenVTable);
     sizes->PathogenVTableEntry = sizeof(PathogenVTableEntry);
     sizes->PathogenOperatorOverloadInfo = sizeof(PathogenOperatorOverloadInfo);
+    sizes->PathogenConstantString = sizeof(PathogenConstantString);
+    sizes->PathogenConstantValueInfo = sizeof(PathogenConstantValueInfo);
     return true;
 }

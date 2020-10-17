@@ -21,6 +21,8 @@ This fork also provides:
 * `pathogen_getArgPassingRestrictions`
   * Returns whether the given type is able to be passed in registers for by-value arguments (or return values.)
   * Note that the underlying method for this function (`RecordDecl::getArgPassingRestrictions`) only cares about C++ restrictions, it does not consider size-related restrictions.
+* `pathogen_ComputeConstantValue`
+  * Tries to compute the constant value of an expression or a variable's initializer and returns the constant value.
 
 This fork was never really intended to be merged into libclang proper. The API shape doesn't match exactly what libclang provides, and it only exists to support [ClangSharp.Pathogen](https://github.com/InfectedLibraries/ClangSharp.Pathogen) (and as such are accessed via C# bindings, hence the lack of a header file.)
 
