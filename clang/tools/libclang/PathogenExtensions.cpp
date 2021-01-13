@@ -13,12 +13,17 @@
 
 #include "CIndexer.h"
 #include "CXCursor.h"
+#include "CXSourceLocation.h"
 #include "CXString.h"
+#include "CXTranslationUnit.h"
 #include "CXType.h"
+
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/RecordLayout.h"
 #include "clang/AST/Type.h"
 #include "clang/AST/VTableBuilder.h"
+#include "clang/Frontend/ASTUnit.h"
+#include "clang/Lex/PreprocessingRecord.h"
 
 #include <limits>
 #include <memory>
@@ -670,7 +675,7 @@ struct PathogenConstantValueInfo
     bool HasSideEffects;
     bool HasUndefinedBehavior;
     PathogenConstantValueKind Kind;
-    //! If Kind is UnsignedInteger, SignedInteger, or FloatingPointer: This is the size of the value in bits
+    //! If Kind is UnsignedInteger, SignedInteger, or FloatingPoint: This is the size of the value in bits
     //! If Kind is String: This is one of PathogenStringConstantKind
     //! If Kind is Unknown, this is the Clang kind (APValue::ValueKind)
     int SubKind;
@@ -799,6 +804,98 @@ PATHOGEN_EXPORT void pathogen_DeletePathogenConstantValueInfo(PathogenConstantVa
 }
 
 //-------------------------------------------------------------------------------------------------
+// Macro Information
+//-------------------------------------------------------------------------------------------------
+
+enum class PathogenMacroVardicKind : int
+{
+    None,
+    C99,
+    Gnu
+};
+
+struct PathogenMacroInformation
+{
+    const char* Name;
+    uint64_t NameLength;
+    CXSourceLocation Location;
+    //! True if this macro was defined at some point but was later undefined.
+    interop_bool WasUndefined;
+    interop_bool IsFunctionLike;
+    //! True if this macro is a built-in.
+    //! (IE: __FILE__ or __LINE__. Does not include macros from the "<built-in>" memory buffer.)
+    interop_bool IsBuiltInMacro;
+    //! True if this macro contains the sequence ", ## __VA_ARGS__"
+    interop_bool HasCommaPasting;
+    PathogenMacroVardicKind VardicKind;
+    int ParameterCount;
+    const char** ParameterNames;
+    uint64_t* ParameterNameLengths;
+};
+
+typedef void (*MacroEnumeratorFunction)(PathogenMacroInformation* macroInfo, void* userData);
+
+PATHOGEN_EXPORT unsigned int pathogen_GetPreprocessorIdentifierCount(CXTranslationUnit translationUnit)
+{
+    ASTUnit* astUnit = cxtu::getASTUnit(translationUnit);
+    const Preprocessor& preprocessor = astUnit->getPreprocessor();
+    const IdentifierTable& idTable = preprocessor.getIdentifierTable();
+    return idTable.size();
+}
+
+PATHOGEN_EXPORT void pathogen_EnumerateMacros(CXTranslationUnit translationUnit, MacroEnumeratorFunction enumerator, void* userData)
+{
+    ASTUnit* astUnit = cxtu::getASTUnit(translationUnit);
+    const Preprocessor& preprocessor = astUnit->getPreprocessor();
+    const IdentifierTable& idTable = preprocessor.getIdentifierTable();
+
+    const int stackParameterListCount = 16;
+    SmallVector<const char*, stackParameterListCount> parameterNames;
+    SmallVector<uint64_t, stackParameterListCount> parameterNameLengths;
+
+    for (auto it = idTable.begin(); it != idTable.end(); it++)
+    {
+        const MacroDirective* macro = preprocessor.getLocalMacroDirectiveHistory(it->getValue());
+
+        // Skip non-macro preprocessor identifiers
+        if (macro == nullptr)
+        {
+            continue;
+        }
+
+        const MacroDirective::DefInfo definition = macro->getDefinition();
+        const MacroInfo* macroInfo = definition.getMacroInfo();
+
+        PathogenMacroInformation pathogenInfo;
+        pathogenInfo.Name = it->getKey().data();
+        pathogenInfo.NameLength = it->getKey().size();
+        pathogenInfo.Location = cxloc::translateSourceLocation(astUnit->getASTContext(), definition.getLocation());
+        pathogenInfo.WasUndefined = definition.isUndefined();
+        pathogenInfo.IsFunctionLike = macroInfo->isFunctionLike();
+        pathogenInfo.IsBuiltInMacro = macroInfo->isBuiltinMacro();
+        pathogenInfo.HasCommaPasting = macroInfo->hasCommaPasting();
+        pathogenInfo.VardicKind = macroInfo->isC99Varargs() ? PathogenMacroVardicKind::C99 : macroInfo->isGNUVarargs() ? PathogenMacroVardicKind::Gnu : PathogenMacroVardicKind::None;
+        pathogenInfo.ParameterCount = macroInfo->getNumParams();
+
+        parameterNames.clear();
+        parameterNameLengths.clear();
+        parameterNames.reserve(pathogenInfo.ParameterCount);
+        parameterNameLengths.reserve(pathogenInfo.ParameterCount);
+
+        for (const IdentifierInfo* parameter : macroInfo->params())
+        {
+            parameterNames.push_back(parameter->getName().data());
+            parameterNameLengths.push_back(parameter->getName().size());
+        }
+
+        pathogenInfo.ParameterNames = parameterNames.data();
+        pathogenInfo.ParameterNameLengths = parameterNameLengths.data();
+
+        enumerator(&pathogenInfo, userData);
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
 // Interop Verification
 //-------------------------------------------------------------------------------------------------
 
@@ -812,6 +909,7 @@ struct PathogenTypeSizes
     int PathogenOperatorOverloadInfo;
     int PathogenConstantString;
     int PathogenConstantValueInfo;
+    int PathogenMacroInformation;
 };
 
 //! Returns true if the sizes were populated, false if sizes->PathogenTypeSizes was invalid.
@@ -831,5 +929,6 @@ PATHOGEN_EXPORT interop_bool pathogen_GetTypeSizes(PathogenTypeSizes* sizes)
     sizes->PathogenOperatorOverloadInfo = sizeof(PathogenOperatorOverloadInfo);
     sizes->PathogenConstantString = sizeof(PathogenConstantString);
     sizes->PathogenConstantValueInfo = sizeof(PathogenConstantValueInfo);
+    sizes->PathogenMacroInformation = sizeof(PathogenMacroInformation);
     return true;
 }
