@@ -19,6 +19,7 @@
 #include "CXType.h"
 
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/Attr.h"
 #include "clang/AST/RecordLayout.h"
 #include "clang/AST/Type.h"
 #include "clang/AST/VTableBuilder.h"
@@ -893,6 +894,28 @@ PATHOGEN_EXPORT void pathogen_EnumerateMacros(CXTranslationUnit translationUnit,
 
         enumerator(&pathogenInfo, userData);
     }
+}
+
+//-------------------------------------------------------------------------------------------------
+// Extended Attribute Information
+//-------------------------------------------------------------------------------------------------
+
+PATHOGEN_EXPORT CXString pathogen_GetUuidAttrGuid(CXCursor cursor)
+{
+    if (!clang_isAttribute(cursor.kind))
+    {
+        return cxstring::createNull();
+    }
+
+    const Attr* attribute = cxcursor::getCursorAttr(cursor);
+    const UuidAttr* uuidAttribute = dyn_cast_or_null<UuidAttr>(attribute);
+
+    if (uuidAttribute == nullptr)
+    {
+        return cxstring::createNull();
+    }
+
+    return cxstring::createRef(uuidAttribute->getGuid());
 }
 
 //-------------------------------------------------------------------------------------------------
