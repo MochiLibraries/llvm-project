@@ -1035,6 +1035,12 @@ PATHOGEN_EXPORT PathogenTemplateInstantiationMetrics pathogen_InstantiateAllFull
             continue;
         }
 
+        // Skip specializations of templates which are never defined
+        if (!classTemplateSpecialization->getSpecializedTemplate()->getTemplatedDecl()->hasDefinition())
+        {
+            continue;
+        }
+
         if (classTemplateSpecialization->getKind() == Decl::Kind::ClassTemplatePartialSpecialization)
         {
             metrics.PartialSpecializationsCount++;
