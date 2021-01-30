@@ -20,9 +20,11 @@
 
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Attr.h"
+#include "clang/AST/DeclTemplate.h"
 #include "clang/AST/RecordLayout.h"
 #include "clang/AST/Type.h"
 #include "clang/AST/VTableBuilder.h"
+#include "clang/Sema/Sema.h"
 #include "clang/Frontend/ASTUnit.h"
 #include "clang/Lex/PreprocessingRecord.h"
 
@@ -919,6 +921,186 @@ PATHOGEN_EXPORT CXString pathogen_GetUuidAttrGuid(CXCursor cursor)
 }
 
 //-------------------------------------------------------------------------------------------------
+// Class Template Specialization Helpers
+//-------------------------------------------------------------------------------------------------
+
+enum class PathogenTemplateSpecializationKind : int
+{
+    Invalid,
+    Undeclared,
+    ImplicitInstantiation,
+    ExplicitSpecialization,
+    ExplicitInstantiationDeclaration,
+    ExplicitInstantiationDefinition
+};
+
+static_assert((int)PathogenTemplateSpecializationKind::Undeclared == (TSK_Undeclared + 1), "Undeclared template specialization kinds must match.");
+static_assert((int)PathogenTemplateSpecializationKind::ImplicitInstantiation == (TSK_ImplicitInstantiation + 1), "Implicit template specialization kinds must match.");
+static_assert((int)PathogenTemplateSpecializationKind::ExplicitSpecialization == (TSK_ExplicitSpecialization + 1), "Excplicit specialization template specialization kinds must match.");
+static_assert((int)PathogenTemplateSpecializationKind::ExplicitInstantiationDeclaration == (TSK_ExplicitInstantiationDeclaration + 1), "Explicit declaration template specialization kinds must match.");
+static_assert((int)PathogenTemplateSpecializationKind::ExplicitInstantiationDefinition == (TSK_ExplicitInstantiationDefinition + 1), "Explicit definition template specialization kinds must match.");
+
+struct PathogenTemplateInstantiationMetrics
+{
+    uint64_t TotalSpecializationsCount;
+    uint64_t PartialSpecializationsCount;
+    uint64_t SuccessfulInstantiationsCount;
+    uint64_t FailedInstantiationsCount;
+};
+
+typedef void (*SpecializedClassTemplateEnumeratorFunction)(PathogenTemplateSpecializationKind specializationKind, CXCursor classTemplate, void* userData);
+
+PATHOGEN_EXPORT PathogenTemplateSpecializationKind pathogen_GetSpecializationKind(CXCursor cursor)
+{
+    // The cursor must be a declaration
+    if (!clang_isDeclaration(cursor.kind))
+    {
+        return PathogenTemplateSpecializationKind::Invalid;
+    }
+
+    const Decl* declaration = cxcursor::getCursorDecl(cursor);
+    const ClassTemplateSpecializationDecl* classTemplateSpecialization = dyn_cast_or_null<ClassTemplateSpecializationDecl>(declaration);
+
+    // Declaration must be a class template specialization
+    if (classTemplateSpecialization == nullptr)
+    {
+        return PathogenTemplateSpecializationKind::Invalid;
+    }
+
+    return (PathogenTemplateSpecializationKind)(classTemplateSpecialization->getSpecializationKind() + 1);
+}
+
+//! Initializes the specified specialized class template declaration.
+//! \returns true if the template was initialized (or was already initialized), false if an error ocurred
+PATHOGEN_EXPORT interop_bool pathogen_InstantiateSpecializedClassTemplate(CXCursor cursor)
+{
+    // The cursor must be a declaration
+    if (!clang_isDeclaration(cursor.kind))
+    {
+        return false;
+    }
+
+    // libclang tries to present an immutable view, but this is obviously mutating things so we have to drop the const
+    // (Evil? Maybe. Problematic? Hopefully not...)
+    Decl* declaration = const_cast<Decl*>(cxcursor::getCursorDecl(cursor));
+    ClassTemplateSpecializationDecl* classTemplateSpecialization = dyn_cast_or_null<ClassTemplateSpecializationDecl>(declaration);
+
+    // Declaration must be a class template specialization
+    if (classTemplateSpecialization == nullptr)
+    {
+        return false;
+    }
+
+    // If the class tempalte is already specialized there's nothing to do
+    if (classTemplateSpecialization->getSpecializationKind() != TSK_Undeclared)
+    {
+        return true;
+    }
+
+    // Implicitly instantiate the class template
+    ASTUnit* unit = cxcursor::getCursorASTUnit(cursor);
+    Sema& sema = unit->getSema();
+    SourceLocation sourceLocation = classTemplateSpecialization->getSourceRange().getBegin();
+    return !sema.InstantiateClassTemplateSpecialization(sourceLocation, classTemplateSpecialization, TSK_ImplicitInstantiation);
+}
+
+//! Finds all specialized class templates referenced in the translation unit and implicitly instantiates them
+PATHOGEN_EXPORT PathogenTemplateInstantiationMetrics pathogen_InstantiateAllFullySpecializedClassTemplates(CXTranslationUnit translationUnit)
+{
+    ASTUnit* unit = cxtu::getASTUnit(translationUnit);
+    ASTContext& context = unit->getASTContext();
+    Sema& semanticModel = unit->getSema();
+
+    PathogenTemplateInstantiationMetrics metrics = {};
+
+    // Enumerate all types present in the entire translation unit and look for any record types which point to uninstantiated template specializations
+    for (Type* type : context.getTypes())
+    {
+        if (type->getTypeClass() != Type::TypeClass::Record)
+        {
+            continue;
+        }
+
+        const RecordType* recordType = dyn_cast_or_null<RecordType>(type);
+        if (recordType == nullptr)
+        {
+            continue;
+        }
+
+        RecordDecl* record = recordType->getDecl();
+        ClassTemplateSpecializationDecl* classTemplateSpecialization = dyn_cast_or_null<ClassTemplateSpecializationDecl>(record);
+
+        if (classTemplateSpecialization == nullptr)
+        {
+            continue;
+        }
+
+        if (classTemplateSpecialization->getKind() == Decl::Kind::ClassTemplatePartialSpecialization)
+        {
+            metrics.PartialSpecializationsCount++;
+            continue;
+        }
+
+        metrics.TotalSpecializationsCount++;
+
+        if (classTemplateSpecialization->getSpecializationKind() != TSK_Undeclared)
+        {
+            continue;
+        }
+
+        // Since this implicit instantiation isn't actually present in source, we just attribute it to the template definition.
+        // (Pretty sure this is only used for diagnostics, so it seemingly doesn't matter a ton where it goes.)
+        SourceLocation sourceLocation = classTemplateSpecialization->getSourceRange().getBegin();
+        if (semanticModel.InstantiateClassTemplateSpecialization(sourceLocation, classTemplateSpecialization, TSK_ImplicitInstantiation))
+        {
+            // InstantiateClassTemplateSpecialization returns true on failure.
+            metrics.FailedInstantiationsCount++;
+        }
+        else
+        {
+            metrics.SuccessfulInstantiationsCount++;
+        }
+    }
+
+    return metrics;
+}
+
+//! Enumerates all specialized templates present in the translation unit
+//! Note that this also includes uninstantiated templates too.
+PATHOGEN_EXPORT void pathogen_EnumerateAllSpecializedClassTemplates(CXTranslationUnit translationUnit, SpecializedClassTemplateEnumeratorFunction enumerator, void* userData)
+{
+    ASTUnit* unit = cxtu::getASTUnit(translationUnit);
+    ASTContext& context = unit->getASTContext();
+
+    // Enumerate all types present in the entire translation unit and look for any record types which point to uninstantiated template specializations
+    for (Type* type : context.getTypes())
+    {
+        if (type->getTypeClass() != Type::TypeClass::Record)
+        {
+            continue;
+        }
+
+        const RecordType* recordType = dyn_cast_or_null<RecordType>(type);
+        if (recordType == nullptr)
+        {
+            continue;
+        }
+
+        RecordDecl* record = recordType->getDecl();
+        ClassTemplateSpecializationDecl* classTemplateSpecialization = dyn_cast_or_null<ClassTemplateSpecializationDecl>(record);
+
+        if (classTemplateSpecialization == nullptr)
+        {
+            continue;
+        }
+
+        PathogenTemplateSpecializationKind specializationKind = (PathogenTemplateSpecializationKind)(classTemplateSpecialization->getSpecializationKind() + 1);
+        CXCursor cursor = cxcursor::MakeCXCursor(classTemplateSpecialization, translationUnit);
+        enumerator(specializationKind, cursor, userData);
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
 // Interop Verification
 //-------------------------------------------------------------------------------------------------
 
@@ -933,6 +1115,7 @@ struct PathogenTypeSizes
     int PathogenConstantString;
     int PathogenConstantValueInfo;
     int PathogenMacroInformation;
+    int PathogenTemplateInstantiationMetrics;
 };
 
 //! Returns true if the sizes were populated, false if sizes->PathogenTypeSizes was invalid.
@@ -953,5 +1136,6 @@ PATHOGEN_EXPORT interop_bool pathogen_GetTypeSizes(PathogenTypeSizes* sizes)
     sizes->PathogenConstantString = sizeof(PathogenConstantString);
     sizes->PathogenConstantValueInfo = sizeof(PathogenConstantValueInfo);
     sizes->PathogenMacroInformation = sizeof(PathogenMacroInformation);
+    sizes->PathogenTemplateInstantiationMetrics = sizeof(PathogenTemplateInstantiationMetrics);
     return true;
 }
