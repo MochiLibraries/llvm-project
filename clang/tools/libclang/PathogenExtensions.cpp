@@ -83,7 +83,7 @@ enum class PathogenVTableEntryKind : int32_t
 };
 
 // We verify the enums match manually because we need a stable definition here to reflect on the C# side of things.
-#define verify_vtable_entry_kind(PATHOGEN_KIND, CLANG_KIND) static_assert((int)(PathogenVTableEntryKind:: ## PATHOGEN_KIND) == (int)(VTableComponent:: ## CLANG_KIND), #PATHOGEN_KIND " must match " #CLANG_KIND);
+#define verify_vtable_entry_kind(PATHOGEN_KIND, CLANG_KIND) static_assert((int)(PathogenVTableEntryKind::PATHOGEN_KIND) == (int)(VTableComponent::CLANG_KIND), #PATHOGEN_KIND " must match " #CLANG_KIND);
 verify_vtable_entry_kind(VCallOffset, CK_VCallOffset)
 verify_vtable_entry_kind(VBaseOffset, CK_VBaseOffset)
 verify_vtable_entry_kind(OffsetToTop, CK_OffsetToTop)
@@ -504,7 +504,7 @@ enum class PathogenOperatorOverloadKind : int32_t
 };
 
 // We verify the enums match manually because we need a stable definition here to reflect on the C# side of things.
-#define verify_operator_overload_kind(PATHOGEN_KIND, CLANG_KIND) static_assert((int)(PathogenOperatorOverloadKind:: ## PATHOGEN_KIND) == (int)(CLANG_KIND), #PATHOGEN_KIND " must match " #CLANG_KIND);
+#define verify_operator_overload_kind(PATHOGEN_KIND, CLANG_KIND) static_assert((int)(PathogenOperatorOverloadKind::PATHOGEN_KIND) == (int)(CLANG_KIND), #PATHOGEN_KIND " must match " #CLANG_KIND);
 verify_operator_overload_kind(None, OO_None)
 verify_operator_overload_kind(New, OO_New)
 verify_operator_overload_kind(Delete, OO_Delete)
@@ -566,7 +566,7 @@ struct PathogenOperatorOverloadInfo
 static PathogenOperatorOverloadInfo OperatorInformation[] =
 {
     { PathogenOperatorOverloadKind::None, nullptr, nullptr, false, false, false }, // OO_None
-#define OVERLOADED_OPERATOR(Name, Spelling, Token, Unary, Binary, MemberOnly) { PathogenOperatorOverloadKind:: ## Name, #Name, Spelling, Unary, Binary, MemberOnly },
+#define OVERLOADED_OPERATOR(Name, Spelling, Token, Unary, Binary, MemberOnly) { PathogenOperatorOverloadKind::Name, #Name, Spelling, Unary, Binary, MemberOnly },
 #include "clang/Basic/OperatorKinds.def"
     // This entry takes the slot for NUM_OVERLOADED_OPERATORS and is returned when an unexpected operator overload is encountered
     { PathogenOperatorOverloadKind::Invalid, nullptr, nullptr, false, false, false },
@@ -616,7 +616,7 @@ enum class PathogenArgPassingKind : int32_t
     Invalid
 };
 
-#define verify_arg_passing_kind(PATHOGEN_KIND, CLANG_KIND) static_assert((int)(PathogenArgPassingKind:: ## PATHOGEN_KIND) == (int)(RecordDecl:: ## CLANG_KIND), #PATHOGEN_KIND " must match " #CLANG_KIND);
+#define verify_arg_passing_kind(PATHOGEN_KIND, CLANG_KIND) static_assert((int)(PathogenArgPassingKind::PATHOGEN_KIND) == (int)(RecordDecl::CLANG_KIND), #PATHOGEN_KIND " must match " #CLANG_KIND);
 verify_arg_passing_kind(CanPassInRegisters, APK_CanPassInRegs)
 verify_arg_passing_kind(CannotPassInRegisters, APK_CannotPassInRegs )
 verify_arg_passing_kind(CanNeverPassInRegisters, APK_CanNeverPassInRegs )
