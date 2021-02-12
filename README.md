@@ -4,6 +4,8 @@ This fork extends the functionality of libclang. Amonth other things, it primari
 
 All functionality provided by this fork can be found in [`PathogenExtensions.cpp`](clang/tools/libclang/PathogenExtensions.cpp).
 
+This fork also includes a (slightly modified) copy of libClangSharp, see [clang/tools/libclang/libClangSharp](clang/tools/libclang/libClangSharp/Readme.md) for details.
+
 Essentially it exposes information provided by `ASTRecordLayout` and `MicrosoftVTableContext`/`ItaniumVTableContext`.
 Both sets of information are intended to be ABI-agnostic.
 
