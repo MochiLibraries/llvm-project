@@ -1,3 +1,7 @@
+# Don't attempt end of line normalization
+# (It causes issues when sharing a directory between Windows and WSL.)
+* -text
+
 libcxx/src/**/*.cpp     merge=libcxx-reformat
 libcxx/include/**/*.h   merge=libcxx-reformat
 
