@@ -121,6 +121,10 @@ if (UNIX AND NOT APPLE AND NOT ${CMAKE_SYSTEM_NAME} MATCHES "AIX")
   set(USE_VERSION_SCRIPT ${LLVM_HAVE_LINK_VERSION_SCRIPT})
 endif()
 
+# Disable the exports file as a workaround for https://github.com/InfectedLibraries/llvm-project/issues/3
+set(LLVM_EXPORTED_SYMBOL_FILE)
+set(USE_VERSION_SCRIPT FALSE)
+
 if (LLVM_EXPORTED_SYMBOL_FILE)
   add_custom_command(OUTPUT ${LLVM_EXPORTED_SYMBOL_FILE}
                      COMMAND "${Python3_EXECUTABLE}"
