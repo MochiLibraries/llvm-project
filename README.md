@@ -27,6 +27,16 @@ This fork also provides:
   * Tries to compute the constant value of an expression or a variable's initializer and returns the constant value.
 * `pathogen_EnumerateMacros`
   * Enumerates macros from the preprocessor and provides information about them.
+* `pathogen_GetUuidAttrGuid`
+  * Gets the GUID used for a COM interface from a [`__declspec(uuid)` attribute](https://docs.microsoft.com/en-us/cpp/cpp/uuid-cpp?view=msvc-160).
+* `pathogen_GetSpecializationKind`
+  * Gets the kind of specialization for a `ClassTemplateSpecializationDecl`.
+* `pathogen_InstantiateSpecializedClassTemplate`
+  * Initializes the specified specialized class template declaration.
+* `pathogen_InstantiateAllFullySpecializedClassTemplates`
+  * Instantiates all fully-specializaed class templates in the translation unit.
+* `pathogen_EnumerateAllSpecializedClassTemplates`
+  * Enumerates all specialized class templates in the translation unit.
 
 This fork was never really intended to be merged into libclang proper. The API shape doesn't match exactly what libclang provides, and it only exists to support [ClangSharp.Pathogen](https://github.com/InfectedLibraries/ClangSharp.Pathogen) (and as such are accessed via C# bindings, hence the lack of a header file.)
 
