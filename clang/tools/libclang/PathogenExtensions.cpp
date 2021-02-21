@@ -1107,6 +1107,29 @@ PATHOGEN_EXPORT void pathogen_EnumerateAllSpecializedClassTemplates(CXTranslatio
 }
 
 //-------------------------------------------------------------------------------------------------
+// Pretty print type with a variable name
+//-------------------------------------------------------------------------------------------------
+
+PATHOGEN_EXPORT CXString pathogen_getTypeSpellingWithPlaceholder(CXType type, const char* placeholder, size_t placeholderByteCount)
+{
+    QualType qualifiedType = QualType::getFromOpaquePtr(type.data[0]);
+
+    if (qualifiedType.isNull())
+    {
+        return cxstring::createEmpty();
+    }
+
+    CXTranslationUnit translationUnit = static_cast<CXTranslationUnit>(type.data[1]);
+    SmallString<64> resultStorage;
+    llvm::raw_svector_ostream resultOutput(resultStorage);
+    PrintingPolicy printingPolicy(cxtu::getASTUnit(translationUnit)->getASTContext().getLangOpts());
+    
+    qualifiedType.print(resultOutput, printingPolicy, std::string(placeholder, placeholderByteCount));
+
+    return cxstring::createDup(resultOutput.str());
+}
+
+//-------------------------------------------------------------------------------------------------
 // Interop Verification
 //-------------------------------------------------------------------------------------------------
 
