@@ -39,6 +39,9 @@ This fork also provides:
   * Enumerates all specialized class templates in the translation unit.
 * `pathogen_getTypeSpellingWithPlaceholder`
   * Similar to `clang_getTypeSpelling`, except it allows specifying the placeholder used to pretty-print the type. (Makes it easy to print a type like `int [10]` as `int someParameterName[10]`.)
+* `pathogen_BeginEnumerateDeclarationsRaw` / `pathogen_EnumerateDeclarationsRawMoveNext`
+  * Enumerates child declarations from a declaration context without any filtering.
+  * In particular, this is useful for enumerating the members of an implicitly-instantiated template specialization.
 
 This fork was never really intended to be merged into libclang proper. The API shape doesn't match exactly what libclang provides, and it only exists to support [ClangSharp.Pathogen](https://github.com/InfectedLibraries/ClangSharp.Pathogen) (and as such are accessed via C# bindings, hence the lack of a header file.)
 

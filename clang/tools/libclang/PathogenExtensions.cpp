@@ -1130,6 +1130,56 @@ PATHOGEN_EXPORT CXString pathogen_getTypeSpellingWithPlaceholder(CXType type, co
 }
 
 //-------------------------------------------------------------------------------------------------
+// Enumerate child declarations directly
+//-------------------------------------------------------------------------------------------------
+// libclang normally only enumerates cursors for declarations defined in source, this enumerats all of them regardless.
+
+PATHOGEN_EXPORT CXCursor pathogen_BeginEnumerateDeclarationsRaw(CXCursor cursor)
+{
+    // The cursor must be a declaration
+    if (!clang_isDeclaration(cursor.kind))
+    {
+        return clang_getNullCursor();
+    }
+
+    // Get the declaration context
+    const Decl* declaration = cxcursor::getCursorDecl(cursor);
+    const DeclContext* declContext = dyn_cast_or_null<DeclContext>(declaration);
+
+    // The cursor must be a declaration context
+    if (declContext == nullptr || declContext->decls_empty())
+    {
+        return clang_getNullCursor();
+    }
+
+    // Get the start of the declaration list
+    const Decl* child = *declContext->decls_begin();
+    CXTranslationUnit translationUnit = cxcursor::getCursorTU(cursor);
+    return cxcursor::MakeCXCursor(child, translationUnit);
+}
+
+PATHOGEN_EXPORT CXCursor pathogen_EnumerateDeclarationsRawMoveNext(CXCursor cursor)
+{
+    // The cursor must be a declaration
+    if (!clang_isDeclaration(cursor.kind))
+    {
+        return clang_getNullCursor();
+    }
+
+    // Get the next sibling declaration
+    const Decl* declaration = cxcursor::getCursorDecl(cursor);
+    const Decl* sibling = declaration->getNextDeclInContext();
+
+    if (sibling == nullptr)
+    {
+        return clang_getNullCursor();
+    }
+
+    CXTranslationUnit translationUnit = cxcursor::getCursorTU(cursor);
+    return cxcursor::MakeCXCursor(sibling, translationUnit, SourceRange(), /* FirstInDeclGroup */ false);
+}
+
+//-------------------------------------------------------------------------------------------------
 // Interop Verification
 //-------------------------------------------------------------------------------------------------
 
