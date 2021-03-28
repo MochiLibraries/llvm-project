@@ -402,7 +402,7 @@ PATHOGEN_EXPORT PathogenRecordLayout* pathogen_GetRecordLayout(CXCursor cursor)
     }
 
     // Add VTable layouts
-    if (cxxRecord)
+    if (cxxRecord && cxxRecord->isDynamicClass())
     {
         if (context.getVTableContext()->isMicrosoft())
         {
