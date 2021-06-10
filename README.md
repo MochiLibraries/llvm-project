@@ -1,20 +1,21 @@
 # LLVM Compiler Infrastructure - Pathogen Fork
 
-This fork extends the functionality of libclang. Amonth other things, it primarily allows inspecting the memory and vtable layout of records (structs, classes, and unions.) It is currently based on [LLVM 10.0.0](https://github.com/llvm/llvm-project/tree/d32170dbd5b0d54436537b6b75beaf44324e0c28).
+This fork extends the functionality of libclang. It is currently based on [LLVM 10.0.0](https://github.com/llvm/llvm-project/tree/d32170dbd5b0d54436537b6b75beaf44324e0c28).
+
+This fork exists primarily to support [Biohazrd](https://github.com/InfectedLibraries/Biohazrd) via [ClangSharp.Pathogen](https://github.com/InfectedLibraries/ClangSharp.Pathogen). The API is generally designed to simplify calling from C# and little-to-no effort has been put in to making the API consistent.
 
 All functionality provided by this fork can be found in [`PathogenExtensions.cpp`](clang/tools/libclang/PathogenExtensions.cpp).
 
 This fork also includes a (slightly modified) copy of libClangSharp, see [clang/tools/libclang/libClangSharp](clang/tools/libclang/libClangSharp/Readme.md) for details.
 
-Essentially it exposes information provided by `ASTRecordLayout` and `MicrosoftVTableContext`/`ItaniumVTableContext`.
-Both sets of information are intended to be ABI-agnostic.
+The primary APIs provided by this fork are:
 
-The information provided for record layouts is largely based on the behavior of the `-fdump-record-layouts` switch.
-
-The information provided for vtable layouts is somewhat based on the bahvior of the `-fdump-vtable-layouts` switch, but the implementation of this switch for Itanium and Microsoft ABIs is basically completely separate (the information provided by each isn't even consistent.) The codebase meant to be processed by this fork never has multiple inheritance or virtual bases, so it may be lacking in information in that department.
-
-This fork also provides:
-
+* `pathogen_GetRecordLayout`
+  * Allows inspecting the memory and vtable layout of records (structs, classes, and unions.)
+  * Exposes information provided by `ASTRecordLayout` and `MicrosoftVTableContext`/`ItaniumVTableContext` in an ABI-agnostic manner.
+  * The information provided for record layouts is largely based on the behavior of the `-fdump-record-layouts` switch.
+  * The information provided for vtable layouts is somewhat based on the bahvior of the `-fdump-vtable-layouts` switch, but the implementation of this switch for Itanium and Microsoft ABIs is basically completely separate (the information provided by each isn't even consistent.)
+  * Biohazrd does not currently process records with multiple inheritance or virtual bases, so information in this department has never been fully utilized and may be lacking.
 * `pathogen_Location_isFromMainFile`
   * A variant of `clang_Location_isFromMainFile` that uses `SourceManager::isInMainFile` instead of `SourceManager::isWrittenInMainFile`.
   * In particular this function will consider cursors created from a macro expansion in the main file to be in the main file.
@@ -42,6 +43,8 @@ This fork also provides:
 * `pathogen_BeginEnumerateDeclarationsRaw` / `pathogen_EnumerateDeclarationsRawMoveNext`
   * Enumerates child declarations from a declaration context without any filtering.
   * In particular, this is useful for enumerating the members of an implicitly-instantiated template specialization.
+* `pathogen_GetArrangedFunction`
+  * Queries Clang's code generator to determine how a function call is arranged.
 
 This fork was never really intended to be merged into libclang proper. The API shape doesn't match exactly what libclang provides, and it only exists to support [ClangSharp.Pathogen](https://github.com/InfectedLibraries/ClangSharp.Pathogen) (and as such are accessed via C# bindings, hence the lack of a header file.)
 
