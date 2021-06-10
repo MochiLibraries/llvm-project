@@ -476,6 +476,11 @@ public:
     return *PPOpts;
   }
 
+  const CompilerInvocation &getCompilerInvocation() const {
+    assert(Invocation && "ASTUnit does not have compiler invocation");
+    return *Invocation;
+  }
+
   const FileManager &getFileManager() const { return *FileMgr; }
   FileManager &getFileManager() { return *FileMgr; }
 

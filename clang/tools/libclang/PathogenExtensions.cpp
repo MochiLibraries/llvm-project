@@ -24,16 +24,40 @@
 #include "clang/AST/RecordLayout.h"
 #include "clang/AST/Type.h"
 #include "clang/AST/VTableBuilder.h"
-#include "clang/Sema/Sema.h"
+#include "clang/CodeGen/CodeGenABITypes.h"
+#include "clang/CodeGen/ModuleBuilder.h"
 #include "clang/Frontend/ASTUnit.h"
+#include "clang/Frontend/CompilerInvocation.h"
+#include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Lex/PreprocessingRecord.h"
+#include "clang/Sema/Sema.h"
+
+#include "llvm/IR/LLVMContext.h"
+
+// These APIs are technically private to the CodeGen module
+#include "../lib/CodeGen/CodeGenModule.h"
+#include "../lib/CodeGen/CGCXXABI.h"
 
 #include <limits>
 #include <memory>
 
 using namespace clang;
+using ABIArgInfo = CodeGen::ABIArgInfo;
 
 #define PATHOGEN_EXPORT extern "C" CINDEX_LINKAGE
+
+// This is incomplete but good enough for our purposes
+#define PATHOGEN_FLAGS(ENUM_TYPE) \
+    inline ENUM_TYPE operator|(ENUM_TYPE a, ENUM_TYPE b) \
+    { \
+        return static_cast<ENUM_TYPE>(static_cast<std::underlying_type<ENUM_TYPE>::type>(a) | static_cast<std::underlying_type<ENUM_TYPE>::type>(b)); \
+    } \
+    \
+    inline ENUM_TYPE& operator|=(ENUM_TYPE& a, ENUM_TYPE b) \
+    { \
+        a = a | b; \
+        return a; \
+    }
 
 typedef unsigned char interop_bool;
 
@@ -620,8 +644,8 @@ enum class PathogenArgPassingKind : int32_t
 
 #define verify_arg_passing_kind(PATHOGEN_KIND, CLANG_KIND) static_assert((int)(PathogenArgPassingKind::PATHOGEN_KIND) == (int)(RecordDecl::CLANG_KIND), #PATHOGEN_KIND " must match " #CLANG_KIND);
 verify_arg_passing_kind(CanPassInRegisters, APK_CanPassInRegs)
-verify_arg_passing_kind(CannotPassInRegisters, APK_CannotPassInRegs )
-verify_arg_passing_kind(CanNeverPassInRegisters, APK_CanNeverPassInRegs )
+verify_arg_passing_kind(CannotPassInRegisters, APK_CannotPassInRegs)
+verify_arg_passing_kind(CanNeverPassInRegisters, APK_CanNeverPassInRegs)
 
 PATHOGEN_EXPORT PathogenArgPassingKind pathogen_getArgPassingRestrictions(CXCursor cursor)
 {
@@ -1180,6 +1204,458 @@ PATHOGEN_EXPORT CXCursor pathogen_EnumerateDeclarationsRawMoveNext(CXCursor curs
 }
 
 //-------------------------------------------------------------------------------------------------
+// Code Generation
+//-------------------------------------------------------------------------------------------------
+
+struct PathogenCodeGenerator
+{
+    llvm::LLVMContext* LlvmContext;
+    CodeGenerator* CodeGenerator;
+};
+
+PATHOGEN_EXPORT void pathogen_CreateCodeGenerator(CXTranslationUnit translationUnit, PathogenCodeGenerator* codeGenerator)
+{
+    assert(codeGenerator->LlvmContext == nullptr);
+    assert(codeGenerator->CodeGenerator == nullptr);
+
+    ASTUnit* astUnit = cxtu::getASTUnit(translationUnit);
+    ASTContext& astContext = astUnit->getASTContext();
+    const CompilerInvocation& invocation = astUnit->getCompilerInvocation();
+
+    codeGenerator->LlvmContext = new llvm::LLVMContext();
+    codeGenerator->CodeGenerator = CreateLLVMCodeGen
+    (
+        astUnit->getDiagnostics(),
+        "ClangSharp.Pathogen",
+        invocation.getHeaderSearchOpts(),
+        invocation.getPreprocessorOpts(),
+        invocation.getCodeGenOpts(),
+        *codeGenerator->LlvmContext
+    );
+    codeGenerator->CodeGenerator->Initialize(astContext);
+}
+
+PATHOGEN_EXPORT void pathogen_DisposeCodeGenerator(PathogenCodeGenerator* codeGenerator)
+{
+    delete codeGenerator->CodeGenerator;
+    delete codeGenerator->LlvmContext;
+
+    codeGenerator->CodeGenerator = nullptr;
+    codeGenerator->LlvmContext = nullptr;
+}
+
+enum class PathogenLlvmCallingConventionKind : uint8_t
+{
+    C = 0,
+    Fast = 8,
+    Cold = 9,
+    GHC = 10,
+    HiPE = 11,
+    WebKit_JS = 12,
+    AnyReg = 13,
+    PreserveMost = 14,
+    PreserveAll = 15,
+    Swift = 16,
+    CXX_FAST_TLS = 17,
+    Tail = 18,
+    CFGuard_Check = 19,
+    FirstTargetCC = 64,
+    X86_StdCall = 64,
+    X86_FastCall = 65,
+    ARM_APCS = 66,
+    ARM_AAPCS = 67,
+    ARM_AAPCS_VFP = 68,
+    MSP430_INTR = 69,
+    X86_ThisCall = 70,
+    PTX_Kernel = 71,
+    PTX_Device = 72,
+    SPIR_FUNC = 75,
+    SPIR_KERNEL = 76,
+    Intel_OCL_BI = 77,
+    X86_64_SysV = 78,
+    Win64 = 79,
+    X86_VectorCall = 80,
+    HHVM = 81,
+    HHVM_C = 82,
+    X86_INTR = 83,
+    AVR_INTR = 84,
+    AVR_SIGNAL = 85,
+    AVR_BUILTIN = 86,
+    AMDGPU_VS = 87,
+    AMDGPU_GS = 88,
+    AMDGPU_PS = 89,
+    AMDGPU_CS = 90,
+    AMDGPU_KERNEL = 91,
+    X86_RegCall = 92,
+    AMDGPU_HS = 93,
+    MSP430_BUILTIN = 94,
+    AMDGPU_LS = 95,
+    AMDGPU_ES = 96,
+    AArch64_VectorCall = 97,
+    AArch64_SVE_VectorCall = 98,
+    WASM_EmscriptenInvoke = 99
+};
+#define verify_llvm_calling_convention_kind(KIND) static_assert((int)(PathogenLlvmCallingConventionKind::KIND) == ((int)llvm::CallingConv::KIND), "LLVM " #KIND " must match Pathogen " #KIND);
+verify_llvm_calling_convention_kind(C);
+verify_llvm_calling_convention_kind(Fast);
+verify_llvm_calling_convention_kind(Cold);
+verify_llvm_calling_convention_kind(GHC);
+verify_llvm_calling_convention_kind(HiPE);
+verify_llvm_calling_convention_kind(WebKit_JS);
+verify_llvm_calling_convention_kind(AnyReg);
+verify_llvm_calling_convention_kind(PreserveMost);
+verify_llvm_calling_convention_kind(PreserveAll);
+verify_llvm_calling_convention_kind(Swift);
+verify_llvm_calling_convention_kind(CXX_FAST_TLS);
+verify_llvm_calling_convention_kind(Tail);
+verify_llvm_calling_convention_kind(CFGuard_Check);
+verify_llvm_calling_convention_kind(FirstTargetCC);
+verify_llvm_calling_convention_kind(X86_StdCall);
+verify_llvm_calling_convention_kind(X86_FastCall);
+verify_llvm_calling_convention_kind(ARM_APCS);
+verify_llvm_calling_convention_kind(ARM_AAPCS);
+verify_llvm_calling_convention_kind(ARM_AAPCS_VFP);
+verify_llvm_calling_convention_kind(MSP430_INTR);
+verify_llvm_calling_convention_kind(X86_ThisCall);
+verify_llvm_calling_convention_kind(PTX_Kernel);
+verify_llvm_calling_convention_kind(PTX_Device);
+verify_llvm_calling_convention_kind(SPIR_FUNC);
+verify_llvm_calling_convention_kind(SPIR_KERNEL);
+verify_llvm_calling_convention_kind(Intel_OCL_BI);
+verify_llvm_calling_convention_kind(X86_64_SysV);
+verify_llvm_calling_convention_kind(Win64);
+verify_llvm_calling_convention_kind(X86_VectorCall);
+verify_llvm_calling_convention_kind(HHVM);
+verify_llvm_calling_convention_kind(HHVM_C);
+verify_llvm_calling_convention_kind(X86_INTR);
+verify_llvm_calling_convention_kind(AVR_INTR);
+verify_llvm_calling_convention_kind(AVR_SIGNAL);
+verify_llvm_calling_convention_kind(AVR_BUILTIN);
+verify_llvm_calling_convention_kind(AMDGPU_VS);
+verify_llvm_calling_convention_kind(AMDGPU_GS);
+verify_llvm_calling_convention_kind(AMDGPU_PS);
+verify_llvm_calling_convention_kind(AMDGPU_CS);
+verify_llvm_calling_convention_kind(AMDGPU_KERNEL);
+verify_llvm_calling_convention_kind(X86_RegCall);
+verify_llvm_calling_convention_kind(AMDGPU_HS);
+verify_llvm_calling_convention_kind(MSP430_BUILTIN);
+verify_llvm_calling_convention_kind(AMDGPU_LS);
+verify_llvm_calling_convention_kind(AMDGPU_ES);
+verify_llvm_calling_convention_kind(AArch64_VectorCall);
+verify_llvm_calling_convention_kind(AArch64_SVE_VectorCall);
+verify_llvm_calling_convention_kind(WASM_EmscriptenInvoke);
+
+enum class PathogenClangCallingConventionKind : uint8_t
+{
+    C,
+    X86StdCall,
+    X86FastCall,
+    X86ThisCall,
+    X86VectorCall,
+    X86Pascal,
+    Win64,
+    X86_64SysV,
+    X86RegCall,
+    AAPCS,
+    AAPCS_VFP,
+    IntelOclBicc,
+    SpirFunction,
+    OpenCLKernel,
+    Swift,
+    PreserveMost,
+    PreserveAll,
+    AArch64VectorCall,
+};
+#define verify_clang_calling_convention_kind(PATHOGEN_KIND, CLANG_KIND) static_assert((int)(PathogenClangCallingConventionKind::PATHOGEN_KIND) == ((int)clang::CLANG_KIND), "Clang " #CLANG_KIND " must match Pathogen " #PATHOGEN_KIND);
+verify_clang_calling_convention_kind(C, CC_C);
+verify_clang_calling_convention_kind(X86StdCall, CC_X86StdCall);
+verify_clang_calling_convention_kind(X86FastCall, CC_X86FastCall);
+verify_clang_calling_convention_kind(X86ThisCall, CC_X86ThisCall);
+verify_clang_calling_convention_kind(X86VectorCall, CC_X86VectorCall);
+verify_clang_calling_convention_kind(X86Pascal, CC_X86Pascal);
+verify_clang_calling_convention_kind(Win64, CC_Win64);
+verify_clang_calling_convention_kind(X86_64SysV, CC_X86_64SysV);
+verify_clang_calling_convention_kind(X86RegCall, CC_X86RegCall);
+verify_clang_calling_convention_kind(AAPCS, CC_AAPCS);
+verify_clang_calling_convention_kind(AAPCS_VFP, CC_AAPCS_VFP);
+verify_clang_calling_convention_kind(IntelOclBicc, CC_IntelOclBicc);
+verify_clang_calling_convention_kind(SpirFunction, CC_SpirFunction);
+verify_clang_calling_convention_kind(OpenCLKernel, CC_OpenCLKernel);
+verify_clang_calling_convention_kind(Swift, CC_Swift);
+verify_clang_calling_convention_kind(PreserveMost, CC_PreserveMost);
+verify_clang_calling_convention_kind(PreserveAll, CC_PreserveAll);
+verify_clang_calling_convention_kind(AArch64VectorCall, CC_AArch64VectorCall);
+
+enum class PathogenArrangedFunctionFlags : uint16_t
+{
+    None = 0,
+    IsInstanceMethod = 1,
+    IsChainCall = 2,
+    IsNoReturn = 4,
+    IsReturnsRetained = 8,
+    IsNoCallerSavedRegs = 16,
+    HasRegParm = 32,
+    IsNoCfCheck = 64,
+    IsVariadic = 128,
+    UsesInAlloca = 256,
+    HasExtendedParameterInfo = 512,
+};
+PATHOGEN_FLAGS(PathogenArrangedFunctionFlags);
+
+enum class PathogenArgumentKind : uint8_t
+{
+    Direct,
+    Extend,
+    Indirect,
+    Ignore,
+    Expand,
+    CoerceAndExpand,
+    InAlloca
+};
+#define verify_argument_kind(KIND) static_assert((int)(PathogenArgumentKind::KIND) == ((int)ABIArgInfo::KIND), "Clang argument kind " #KIND " must match Pathogen kind " #KIND);
+verify_argument_kind(Direct);
+verify_argument_kind(Extend);
+verify_argument_kind(Indirect);
+verify_argument_kind(Ignore);
+verify_argument_kind(Expand);
+verify_argument_kind(CoerceAndExpand);
+verify_argument_kind(InAlloca);
+static_assert(ABIArgInfo::KindFirst == ABIArgInfo::Direct, "Direct must be the final ABI argument kind.");
+static_assert(ABIArgInfo::KindLast == ABIArgInfo::InAlloca, "InAlloca must be the final ABI argument kind.");
+
+enum class PathogenArgumentFlags : uint16_t
+{
+    None = 0,
+    // Requires Kind = Direct, Extend, or CoerceAndExpand
+    HasCoerceToTypeType = 1,
+    // Requires Kind = Direct, Extend, Indirect, or Expand
+    HasPaddingType = 2,
+    // Requires Kind = CoerceAndExpand
+    HasUnpaddedCoerceAndExpandType = 4,
+    // Applies to any kind
+    PaddingInRegister = 8,
+    // Requires Kind = InAlloca
+    IsInAllocaSRet = 16,
+    // Requires Kind = Indirect
+    IsIndirectByVal = 32,
+    // Requires Kind = Indirect
+    IsIndirectRealign = 64,
+    // Requires Kind = Indirect
+    IsSRetAfterThis = 128,
+    // Requires Kind = Direct, Extend, or Indirect
+    IsInRegister = 256,
+    // Requires Kind = Direct
+    CanBeFlattened = 512,
+    // Requires Kind = Extend
+    IsSignExtended = 1024
+};
+PATHOGEN_FLAGS(PathogenArgumentFlags);
+
+struct PathogenArgumentInfo
+{
+    CXType Type;
+    PathogenArgumentKind Kind;
+    // Not exposing ABIArgInfo::TypeData
+    // ABIArgInfo::PaddingType and UnpaddedCoerceAndExpandType are exposed as on/off flags for now until we find a use for them.
+
+    PathogenArgumentFlags Flags;
+
+    // For Kind = Direct or Extend: DirectOffset
+    // For Kind = Inidrect: IndirectAlignment
+    // For Kind = InAlloca: AllocaFieldIndex
+    uint32_t Extra;
+};
+
+struct PathogenArrangedFunction
+{
+    PathogenLlvmCallingConventionKind CallingConvention;
+    PathogenLlvmCallingConventionKind EffectiveCallingConvention;
+    PathogenClangCallingConventionKind AstCallingConvention;
+    PathogenArrangedFunctionFlags Flags;
+    uint32_t RequiredArgumentCount;
+    uint32_t ArgumentsPassedInRegisterCount;
+    uint32_t ArgumentCount;
+    PathogenArgumentInfo ReturnInfo;
+};
+
+static void pathogen_CreateArgumentInfo(CXTranslationUnit translationUnit, CanQualType type, const ABIArgInfo& info, PathogenArgumentInfo* output)
+{
+    output->Type = cxtype::MakeCXType(type, translationUnit);
+    output->Kind = (PathogenArgumentKind)info.getKind();
+    output->Flags = PathogenArgumentFlags::None;
+    output->Extra = 0;
+
+    if (info.canHaveCoerceToType() && info.getCoerceToType() != nullptr)
+    {
+        output->Flags |= PathogenArgumentFlags::HasCoerceToTypeType;
+    }
+
+    if (info.getPaddingType() != nullptr)
+    {
+        output->Flags |= PathogenArgumentFlags::HasPaddingType;
+    }
+
+    if ((info.isDirect() || info.isExtend() || info.isIndirect()) && info.getInReg())
+    {
+        output->Flags |= PathogenArgumentFlags::IsInRegister;
+    }
+
+    switch (info.getKind())
+    {
+        case ABIArgInfo::Direct:
+            if (info.getCanBeFlattened())
+            {
+                output->Flags |= PathogenArgumentFlags::CanBeFlattened;
+            }
+
+            output->Extra = info.getDirectOffset();
+            break;
+        case ABIArgInfo::Extend:
+            if (info.isSignExt())
+            {
+                output->Flags |= PathogenArgumentFlags::IsSignExtended;
+            }
+            
+            output->Extra = info.getDirectOffset();
+            break;
+        case ABIArgInfo::Indirect:;
+            if (info.getIndirectByVal())
+            {
+                output->Flags |= PathogenArgumentFlags::IsIndirectByVal;
+            }
+
+            if (info.getIndirectRealign())
+            {
+                output->Flags |= PathogenArgumentFlags::IsIndirectRealign;
+            }
+
+            if (info.isSRetAfterThis())
+            {
+                output->Flags |= PathogenArgumentFlags::IsSRetAfterThis;
+            }
+
+            output->Extra = info.getIndirectAlign().getQuantity();
+            break;
+        case ABIArgInfo::Ignore:
+        case ABIArgInfo::Expand:
+            break;
+        case ABIArgInfo::CoerceAndExpand:
+            if (info.getUnpaddedCoerceAndExpandType())
+            {
+                output->Flags |= PathogenArgumentFlags::HasUnpaddedCoerceAndExpandType;
+            }
+            break;
+        case ABIArgInfo::InAlloca:
+            if (info.getInAllocaSRet())
+            {
+                output->Flags |= PathogenArgumentFlags::IsInAllocaSRet;
+            }
+
+            output->Extra = info.getInAllocaFieldIndex();
+            break;
+    }
+}
+
+PATHOGEN_EXPORT PathogenArrangedFunction* pathogen_GetArrangedFunction(PathogenCodeGenerator* codeGenerator, CXCursor cursor)
+{
+    CXTranslationUnit translationUnit = clang_Cursor_getTranslationUnit(cursor);
+
+    // The cursor must be a declaration
+    if (!clang_isDeclaration(cursor.kind))
+    {
+        return nullptr;
+    }
+
+    // Get the function declaration
+    const Decl* declaration = cxcursor::getCursorDecl(cursor);
+    const FunctionDecl* functionDeclaration = dyn_cast_or_null<FunctionDecl>(declaration);
+    const CXXConstructorDecl* constructorDeclaration = dyn_cast_or_null<CXXConstructorDecl>(declaration);
+    const CXXDestructorDecl* destructorDeclaration = dyn_cast_or_null<CXXDestructorDecl>(declaration);
+
+    // Build the global declaration
+    GlobalDecl globalDeclaration;
+
+    if (constructorDeclaration != nullptr)
+    {
+        globalDeclaration = GlobalDecl(constructorDeclaration, Ctor_Complete); //TODO: Allow changing constructor type
+    }
+    else if (destructorDeclaration != nullptr)
+    {
+        globalDeclaration = GlobalDecl(destructorDeclaration, Dtor_Complete); //TODO: Allow changing destructor type
+    }
+    else if (functionDeclaration != nullptr)
+    {
+        globalDeclaration = GlobalDecl(functionDeclaration);
+    }
+    else
+    {
+        return nullptr;
+    }
+
+    // Arrange the function
+    const CodeGen::CGFunctionInfo& function = codeGenerator->CodeGenerator->CGM().getTypes().arrangeGlobalDeclaration(globalDeclaration);
+    ArrayRef<CodeGen::CGFunctionInfoArgInfo> arguments = function.arguments();
+
+    // Allocate the Pathogen representation of the arranged function
+    PathogenArrangedFunction* result = (PathogenArrangedFunction*)malloc(sizeof(PathogenArrangedFunction) + (sizeof(PathogenArgumentInfo) * arguments.size()));
+    PathogenArgumentInfo* resultArguments = (PathogenArgumentInfo*)&result[1];
+
+    // Populate the result
+    result->CallingConvention = (PathogenLlvmCallingConventionKind)function.getCallingConvention();
+    result->EffectiveCallingConvention = (PathogenLlvmCallingConventionKind)function.getEffectiveCallingConvention();
+    result->AstCallingConvention = (PathogenClangCallingConventionKind)function.getASTCallingConvention();
+    result->RequiredArgumentCount = function.getNumRequiredArgs();
+    result->ArgumentsPassedInRegisterCount = function.getRegParm();
+    result->ArgumentCount = (uint32_t)arguments.size();
+    pathogen_CreateArgumentInfo(translationUnit, function.getReturnType(), function.getReturnInfo(), &result->ReturnInfo);
+
+    for (size_t i = 0; i < arguments.size(); i++)
+    {
+        pathogen_CreateArgumentInfo(translationUnit, arguments[i].type, arguments[i].info, &resultArguments[i]);
+    }
+
+    // Populate the function flags
+    result->Flags = PathogenArrangedFunctionFlags::None;
+
+    if (function.isInstanceMethod())
+    { result->Flags |= PathogenArrangedFunctionFlags::IsInstanceMethod; }
+
+    if (function.isChainCall())
+    { result->Flags |= PathogenArrangedFunctionFlags::IsChainCall; }
+
+    if (function.isNoReturn())
+    { result->Flags |= PathogenArrangedFunctionFlags::IsNoReturn; }
+
+    if (function.isReturnsRetained())
+    { result->Flags |= PathogenArrangedFunctionFlags::IsReturnsRetained; }
+
+    if (function.isNoCallerSavedRegs())
+    { result->Flags |= PathogenArrangedFunctionFlags::IsNoCallerSavedRegs; }
+
+    if (function.getHasRegParm())
+    { result->Flags |= PathogenArrangedFunctionFlags::HasRegParm; }
+
+    if (function.isNoCfCheck())
+    { result->Flags |= PathogenArrangedFunctionFlags::IsNoCfCheck; }
+
+    if (function.isVariadic())
+    { result->Flags |= PathogenArrangedFunctionFlags::IsVariadic; }
+
+    if (function.usesInAlloca())
+    { result->Flags |= PathogenArrangedFunctionFlags::UsesInAlloca; }
+
+    if (function.getExtParameterInfos().size() > 0)
+    { result->Flags |= PathogenArrangedFunctionFlags::HasExtendedParameterInfo; }
+
+    return result;
+}
+
+PATHOGEN_EXPORT void pathogen_DisposeArrangedFunction(PathogenArrangedFunction* function)
+{
+    free(function);
+}
+
+//-------------------------------------------------------------------------------------------------
 // Interop Verification
 //-------------------------------------------------------------------------------------------------
 
@@ -1195,6 +1671,9 @@ struct PathogenTypeSizes
     int PathogenConstantValueInfo;
     int PathogenMacroInformation;
     int PathogenTemplateInstantiationMetrics;
+    int PathogenCodeGenerator;
+    int PathogenArgumentInfo;
+    int PathogenArrangedFunction;
 };
 
 //! Returns true if the sizes were populated, false if sizes->PathogenTypeSizes was invalid.
@@ -1216,5 +1695,8 @@ PATHOGEN_EXPORT interop_bool pathogen_GetTypeSizes(PathogenTypeSizes* sizes)
     sizes->PathogenConstantValueInfo = sizeof(PathogenConstantValueInfo);
     sizes->PathogenMacroInformation = sizeof(PathogenMacroInformation);
     sizes->PathogenTemplateInstantiationMetrics = sizeof(PathogenTemplateInstantiationMetrics);
+    sizes->PathogenCodeGenerator = sizeof(PathogenCodeGenerator);
+    sizes->PathogenArgumentInfo = sizeof(PathogenArgumentInfo);
+    sizes->PathogenArrangedFunction = sizeof(PathogenArrangedFunction);
     return true;
 }
