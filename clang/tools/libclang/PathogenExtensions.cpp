@@ -1556,44 +1556,8 @@ static void pathogen_CreateArgumentInfo(CXTranslationUnit translationUnit, CanQu
     }
 }
 
-PATHOGEN_EXPORT PathogenArrangedFunction* pathogen_GetArrangedFunction(PathogenCodeGenerator* codeGenerator, CXCursor cursor)
+static PathogenArrangedFunction* pathogen_CreateArrangedFunction(CXTranslationUnit translationUnit, const CodeGen::CGFunctionInfo& function)
 {
-    CXTranslationUnit translationUnit = clang_Cursor_getTranslationUnit(cursor);
-
-    // The cursor must be a declaration
-    if (!clang_isDeclaration(cursor.kind))
-    {
-        return nullptr;
-    }
-
-    // Get the function declaration
-    const Decl* declaration = cxcursor::getCursorDecl(cursor);
-    const FunctionDecl* functionDeclaration = dyn_cast_or_null<FunctionDecl>(declaration);
-    const CXXConstructorDecl* constructorDeclaration = dyn_cast_or_null<CXXConstructorDecl>(declaration);
-    const CXXDestructorDecl* destructorDeclaration = dyn_cast_or_null<CXXDestructorDecl>(declaration);
-
-    // Build the global declaration
-    GlobalDecl globalDeclaration;
-
-    if (constructorDeclaration != nullptr)
-    {
-        globalDeclaration = GlobalDecl(constructorDeclaration, Ctor_Complete); //TODO: Allow changing constructor type
-    }
-    else if (destructorDeclaration != nullptr)
-    {
-        globalDeclaration = GlobalDecl(destructorDeclaration, Dtor_Complete); //TODO: Allow changing destructor type
-    }
-    else if (functionDeclaration != nullptr)
-    {
-        globalDeclaration = GlobalDecl(functionDeclaration);
-    }
-    else
-    {
-        return nullptr;
-    }
-
-    // Arrange the function
-    const CodeGen::CGFunctionInfo& function = codeGenerator->CodeGenerator->CGM().getTypes().arrangeGlobalDeclaration(globalDeclaration);
     ArrayRef<CodeGen::CGFunctionInfoArgInfo> arguments = function.arguments();
 
     // Allocate the Pathogen representation of the arranged function
@@ -1648,6 +1612,77 @@ PATHOGEN_EXPORT PathogenArrangedFunction* pathogen_GetArrangedFunction(PathogenC
     { result->Flags |= PathogenArrangedFunctionFlags::HasExtendedParameterInfo; }
 
     return result;
+}
+
+PATHOGEN_EXPORT PathogenArrangedFunction* pathogen_GetArrangedFunction(PathogenCodeGenerator* codeGenerator, CXCursor cursor)
+{
+    CXTranslationUnit translationUnit = clang_Cursor_getTranslationUnit(cursor);
+
+    // The cursor must be a declaration
+    if (!clang_isDeclaration(cursor.kind))
+    {
+        return nullptr;
+    }
+
+    // Get the function declaration
+    const Decl* declaration = cxcursor::getCursorDecl(cursor);
+    const FunctionDecl* functionDeclaration = dyn_cast_or_null<FunctionDecl>(declaration);
+    const CXXConstructorDecl* constructorDeclaration = dyn_cast_or_null<CXXConstructorDecl>(declaration);
+    const CXXDestructorDecl* destructorDeclaration = dyn_cast_or_null<CXXDestructorDecl>(declaration);
+
+    // Build the global declaration
+    GlobalDecl globalDeclaration;
+
+    if (constructorDeclaration != nullptr)
+    {
+        globalDeclaration = GlobalDecl(constructorDeclaration, Ctor_Complete); //TODO: Allow changing constructor type
+    }
+    else if (destructorDeclaration != nullptr)
+    {
+        globalDeclaration = GlobalDecl(destructorDeclaration, Dtor_Complete); //TODO: Allow changing destructor type
+    }
+    else if (functionDeclaration != nullptr)
+    {
+        globalDeclaration = GlobalDecl(functionDeclaration);
+    }
+    else
+    {
+        return nullptr;
+    }
+
+    // Arrange the function
+    const CodeGen::CGFunctionInfo& function = codeGenerator->CodeGenerator->CGM().getTypes().arrangeGlobalDeclaration(globalDeclaration);
+    return pathogen_CreateArrangedFunction(translationUnit, function);
+}
+
+PATHOGEN_EXPORT PathogenArrangedFunction* pathogen_GetArrangedFunctionPointer(PathogenCodeGenerator* codeGenerator, CXType type)
+{
+    QualType qualifiedType = QualType::getFromOpaquePtr(type.data[0]);
+
+    if (qualifiedType.isNull())
+    {
+        assert(false && "The type is null.");
+        return nullptr;
+    }
+
+    CXTranslationUnit translationUnit = static_cast<CXTranslationUnit>(type.data[1]);
+
+    // Get the function pointer type
+    assert(isa<FunctionType>(qualifiedType) && "The type must be a function type");
+    const FunctionProtoType* functionType = qualifiedType->getAs<FunctionProtoType>();
+
+    if (functionType == nullptr)
+    {
+        assert(false && "Only FunctionProtoType function types are supported.");
+        return nullptr;
+    }
+
+    CanQualType canQualFunctionType = functionType->getCanonicalTypeUnqualified();
+    assert(isa<FunctionProtoType>(canQualFunctionType));
+
+    // Arrange the function
+    const CodeGen::CGFunctionInfo& function = codeGenerator->CodeGenerator->CGM().getTypes().arrangeFreeFunctionType(canQualFunctionType.castAs<FunctionProtoType>());
+    return pathogen_CreateArrangedFunction(translationUnit, function);
 }
 
 PATHOGEN_EXPORT void pathogen_DisposeArrangedFunction(PathogenArrangedFunction* function)
