@@ -43,6 +43,12 @@ The primary APIs provided by this fork are:
 * `pathogen_BeginEnumerateDeclarationsRaw` / `pathogen_EnumerateDeclarationsRawMoveNext`
   * Enumerates child declarations from a declaration context without any filtering.
   * In particular, this is useful for enumerating the members of an implicitly-instantiated template specialization.
+* `pathogen_IsFunctionCallable` / `pathogen_IsFunctionTypeCallable`
+  * Performs checks similar to what Clang does internally to determine if the required types are complete in order to call a function.
+  * As a side-effect, will implicitly instantiate any templates required to perform the call.
+  * `nullptr` is returned when the function is callable. Otherwise a set of one or more strings describing why the function cannot be called is returned.
+  * Due to an unavoidable side-effect of how these functions work, unecessary informational diagnostics may be attached to the translation unit.
+  * (This is because the diagnostics for an incomplete type involved in a function call are split between two areas within Clang. We can handle the error half but not the informational half.)
 * `pathogen_GetArrangedFunction`
   * Queries Clang's code generator to determine how a function call is arranged.
 

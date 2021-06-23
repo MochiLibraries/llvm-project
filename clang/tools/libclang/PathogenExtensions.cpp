@@ -1204,6 +1204,181 @@ PATHOGEN_EXPORT CXCursor pathogen_EnumerateDeclarationsRawMoveNext(CXCursor curs
 }
 
 //-------------------------------------------------------------------------------------------------
+// Function declaration/type callability
+//-------------------------------------------------------------------------------------------------
+
+CXStringSet* pathogen_CreateSingleDiagnosticStringSet(const char* diagnostic)
+{
+    std::vector<std::string> diagnostics;
+    diagnostics.push_back(diagnostic);
+    return cxstring::createSet(diagnostics);
+}
+
+CXStringSet* pathogen_IsFunctionTypeCallable(CXTranslationUnit translationUnit, const FunctionProtoType* functionType)
+{
+    bool isCallable = true;
+    ASTUnit* astUnit = cxtu::getASTUnit(translationUnit);
+    Sema& semanticModel = astUnit->getSema();
+
+    // The source location is just passed through to the diagnoser and we don't use it, so just use a null source location.
+    SourceLocation nullSourceLocation;
+
+    // This captures the diagnostics for incomplete types in some situations
+    // (RequireCompleteType will emit informational diagnostics to highlight forward declarations and such. We unfortunately can't disable this.)
+    class Diagnoser : public Sema::TypeDiagnoser
+    {
+        private:
+            PrintingPolicy printingPolicy;
+        public:
+            bool IsHandlingParameters = false;
+            std::vector<std::string> Diagnostics;
+            bool DiagnosticWasReceived = false;
+
+            Diagnoser(ASTUnit* astUnit)
+                : printingPolicy(astUnit->getASTContext().getLangOpts())
+            {
+            }
+
+        private:
+            void emitDiagnostic(QualType type)
+            {
+                DiagnosticWasReceived = true;
+                SmallString<64> diagnosticStorage;
+                llvm::raw_svector_ostream diagnostic(diagnosticStorage);
+
+                if (!IsHandlingParameters)
+                {
+                    diagnostic << "Return type '";
+                }
+                else
+                {
+                    diagnostic << "Argument type '";
+                }
+
+                type.print(diagnostic, printingPolicy);
+                diagnostic << "' is incomplete.";
+
+                Diagnostics.push_back(diagnostic.str());
+            }
+
+        public:
+            void diagnose(Sema& semanticModel, SourceLocation sourceLocation, QualType type) override
+            {
+                emitDiagnostic(type);
+            }
+
+            void ensureDiagnosticEmitted(QualType type)
+            {
+                if (!DiagnosticWasReceived)
+                {
+                    emitDiagnostic(type);
+                }
+
+                DiagnosticWasReceived = false;
+            }
+    } diagnoser(astUnit);
+
+    // Check the return type
+    // When a function call happens in Clang, this is validated by Sema::CheckCallReturnType.
+    // We don't use it directly because it requires a CallExpr, which we obviously don't have, but the implementation is simple so we duplicat its logic below.
+    {
+        QualType returnType = functionType->getReturnType();
+
+        // Void is always allowed for return types despite being incomplete
+        if (returnType->isVoidType())
+        { }
+        // Complete types are always allowed for return types
+        else if (returnType->isIncompleteType())
+        { }
+        // Require the type to be complete
+        // This gives the semantic model a final chance to complete the type for things like implicitly instantiated tempaltes
+        // (RequireCompleteType returns true upon failure.)
+        else if (semanticModel.RequireCompleteType(nullSourceLocation, returnType, diagnoser))
+        {
+            diagnoser.ensureDiagnosticEmitted(returnType);
+            isCallable = false;
+        }
+    }
+
+    // Check the parameter types
+    diagnoser.IsHandlingParameters = true;
+    for (const QualType parameterType : functionType->param_types())
+    {
+        diagnoser.DiagnosticWasReceived = false;
+
+        // There's not a single place where Clang handles checking whether a type is complete for an argument because the source of the argument value is usually what goes bang well before
+        // the function call expression is even processed. There are some cases where this doesn't happen though, and Sema::RequireCompleteType is what handles those cases.
+        // (It's also probably handles things like variable declaration expressions too, but I did not check.)
+        if (semanticModel.RequireCompleteType(nullSourceLocation, parameterType, diagnoser))
+        {
+            diagnoser.ensureDiagnosticEmitted(parameterType);
+            isCallable = false;
+        }
+    }
+
+    // If we're callable there should not be diagnositcs.
+    // If we're not there should be.
+    if (isCallable)
+    {
+        assert(diagnoser.Diagnostics.size() == 0);
+    }
+    else
+    {
+        assert(diagnoser.Diagnostics.size() > 0);
+    }
+
+    return isCallable ? nullptr : cxstring::createSet(diagnoser.Diagnostics);
+}
+
+CXStringSet* pathogen_IsFunctionCallable(CXTranslationUnit translationUnit, const FunctionDecl* function)
+{
+    const FunctionProtoType* functionType = function->getType()->getAs<FunctionProtoType>();
+
+    if (functionType == nullptr)
+    {
+        assert(false && "FunctionDecl should be a FunctionProtoType");
+        return pathogen_CreateSingleDiagnosticStringSet("The specified function is not a FunctionProtoType.");
+    }
+    
+    return pathogen_IsFunctionTypeCallable(translationUnit, functionType);
+}
+
+PATHOGEN_EXPORT CXStringSet* pathogen_IsFunctionCallable(CXCursor cursor)
+{
+    const Decl* declaration = cxcursor::getCursorDecl(cursor);
+    const FunctionDecl* functionDeclaration = dyn_cast_or_null<FunctionDecl>(declaration);
+
+    if (functionDeclaration == nullptr)
+    {
+        assert(false && "The specified cursor must refer to a FunctionDecl.");
+        return pathogen_CreateSingleDiagnosticStringSet("The specified cursor is not a FunctionDecl.");
+    }
+
+    return pathogen_IsFunctionCallable(cxcursor::getCursorTU(cursor), functionDeclaration);
+}
+
+PATHOGEN_EXPORT CXStringSet* pathogen_IsFunctionTypeCallable(CXType type)
+{
+    QualType qualifiedType = QualType::getFromOpaquePtr(type.data[0]);
+
+    if (qualifiedType.isNull())
+    {
+        assert(false && "The type is null.");
+        return pathogen_CreateSingleDiagnosticStringSet("The specified type is null.");
+    }
+
+    const FunctionProtoType* functionType = qualifiedType->getAs<FunctionProtoType>();
+
+    if (functionType == nullptr)
+    {
+        assert(false && "The specified type must refer to a FunctionProtoType.");
+        return pathogen_CreateSingleDiagnosticStringSet("The specified type is not a FunctionProtoType.");
+    }
+
+    return pathogen_IsFunctionTypeCallable(static_cast<CXTranslationUnit>(type.data[1]), functionType);
+}
+
+//-------------------------------------------------------------------------------------------------
 // Code Generation
 //-------------------------------------------------------------------------------------------------
 
