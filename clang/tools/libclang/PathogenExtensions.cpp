@@ -1796,6 +1796,7 @@ PATHOGEN_EXPORT PathogenArrangedFunction* pathogen_GetArrangedFunction(PathogenC
     // The cursor must be a declaration
     if (!clang_isDeclaration(cursor.kind))
     {
+        assert(false && "The cursor must be a declaration.");
         return nullptr;
     }
 
@@ -1810,10 +1811,12 @@ PATHOGEN_EXPORT PathogenArrangedFunction* pathogen_GetArrangedFunction(PathogenC
 
     if (constructorDeclaration != nullptr)
     {
+        assert(functionDeclaration != nullptr); // Sanity check that constructors are functions
         globalDeclaration = GlobalDecl(constructorDeclaration, Ctor_Complete); //TODO: Allow changing constructor type
     }
     else if (destructorDeclaration != nullptr)
     {
+        assert(functionDeclaration != nullptr); // Sanity check taht destructors are functions
         globalDeclaration = GlobalDecl(destructorDeclaration, Dtor_Complete); //TODO: Allow changing destructor type
     }
     else if (functionDeclaration != nullptr)
@@ -1822,6 +1825,7 @@ PATHOGEN_EXPORT PathogenArrangedFunction* pathogen_GetArrangedFunction(PathogenC
     }
     else
     {
+        assert(false && "The cursor must be a function declaration.");
         return nullptr;
     }
 
