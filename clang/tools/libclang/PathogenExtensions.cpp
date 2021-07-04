@@ -1220,8 +1220,10 @@ CXStringSet* pathogen_IsFunctionTypeCallable(CXTranslationUnit translationUnit, 
     ASTUnit* astUnit = cxtu::getASTUnit(translationUnit);
     Sema& semanticModel = astUnit->getSema();
 
-    // The source location is just passed through to the diagnoser and we don't use it, so just use a null source location.
-    SourceLocation nullSourceLocation;
+    // We don't have a sensible location to use within this function, so we just use the start of the main file.
+    // Generally the source location is just passed through to the diagnoser we defined below and we don't use it.
+    // However, in certain situations it can be passed into other parts of Clang (such as the implicit template initializer) and they expect it to be valid.
+    SourceLocation sourceLocation = astUnit->getStartOfMainFileID();
 
     // This captures the diagnostics for incomplete types in some situations
     // (RequireCompleteType will emit informational diagnostics to highlight forward declarations and such. We unfortunately can't disable this.)
@@ -1288,12 +1290,12 @@ CXStringSet* pathogen_IsFunctionTypeCallable(CXTranslationUnit translationUnit, 
         if (returnType->isVoidType())
         { }
         // Complete types are always allowed for return types
-        else if (returnType->isIncompleteType())
+        else if (!returnType->isIncompleteType())
         { }
         // Require the type to be complete
         // This gives the semantic model a final chance to complete the type for things like implicitly instantiated tempaltes
         // (RequireCompleteType returns true upon failure.)
-        else if (semanticModel.RequireCompleteType(nullSourceLocation, returnType, diagnoser))
+        else if (semanticModel.RequireCompleteType(sourceLocation, returnType, diagnoser))
         {
             diagnoser.ensureDiagnosticEmitted(returnType);
             isCallable = false;
@@ -1309,7 +1311,7 @@ CXStringSet* pathogen_IsFunctionTypeCallable(CXTranslationUnit translationUnit, 
         // There's not a single place where Clang handles checking whether a type is complete for an argument because the source of the argument value is usually what goes bang well before
         // the function call expression is even processed. There are some cases where this doesn't happen though, and Sema::RequireCompleteType is what handles those cases.
         // (It's also probably handles things like variable declaration expressions too, but I did not check.)
-        if (semanticModel.RequireCompleteType(nullSourceLocation, parameterType, diagnoser))
+        if (semanticModel.RequireCompleteType(sourceLocation, parameterType, diagnoser))
         {
             diagnoser.ensureDiagnosticEmitted(parameterType);
             isCallable = false;
