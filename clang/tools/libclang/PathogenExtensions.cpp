@@ -680,11 +680,15 @@ enum class PathogenConstantValueKind : int
 enum class PathogenStringConstantKind : int
 {
     Ascii,
+    //! Never actually used. We replace this with the more appropriate UTF equivalent with WideCharBit set instead.
     WideChar,
     Utf8,
     Utf16,
-    Utf32
+    Utf32,
+    //! When combined with one of the UTF values, indicates that the constant was originally a wchar_t string.
+    WideCharBit = 1 << 31,
 };
+PATHOGEN_FLAGS(PathogenStringConstantKind);
 static_assert((int)PathogenStringConstantKind::Ascii == StringLiteral::Ascii, "ASCII string kinds must match.");
 static_assert((int)PathogenStringConstantKind::WideChar == StringLiteral::Wide, "Wide character string kinds must match.");
 static_assert((int)PathogenStringConstantKind::Utf8 == StringLiteral::UTF8, "UTF8 string kinds must match.");
@@ -703,7 +707,7 @@ struct PathogenConstantValueInfo
     bool HasUndefinedBehavior;
     PathogenConstantValueKind Kind;
     //! If Kind is UnsignedInteger, SignedInteger, or FloatingPoint: This is the size of the value in bits
-    //! If Kind is String: This is one of PathogenStringConstantKind
+    //! If Kind is String: This is one of PathogenStringConstantKind, potentially with WideCharBit set in the case of wchar_t.
     //! If Kind is Unknown, this is the Clang kind (APValue::ValueKind)
     int SubKind;
     //! The value of the constant
@@ -807,7 +811,27 @@ PATHOGEN_EXPORT bool pathogen_ComputeConstantValue(CXCursor cursor, PathogenCons
             {
                 const StringLiteral* stringLiteral = (const StringLiteral*)lValueExpr;
                 info->Kind = PathogenConstantValueKind::String;
-                info->SubKind = (int)stringLiteral->getKind();
+                PathogenStringConstantKind* stringKind = (PathogenStringConstantKind*)&info->SubKind;
+                *stringKind = (PathogenStringConstantKind)stringLiteral->getKind();
+
+                if (*stringKind == PathogenStringConstantKind::WideChar)
+                {
+                    switch (stringLiteral->getCharByteWidth())
+                    {
+                        case 1:
+                            *stringKind = PathogenStringConstantKind::Utf8 | PathogenStringConstantKind::WideCharBit;
+                            break;
+                        case 2:
+                            *stringKind = PathogenStringConstantKind::Utf16 | PathogenStringConstantKind::WideCharBit;
+                            break;
+                        case 4:
+                            *stringKind = PathogenStringConstantKind::Utf32 | PathogenStringConstantKind::WideCharBit;
+                            break;
+                        default:
+                            assert(false && "wchar_t string literal has an unexpected char width.");
+                            break;
+                    }
+                }
 
                 PathogenConstantString* string = (PathogenConstantString*)malloc(sizeof(PathogenConstantString) + stringLiteral->getByteLength() - 1);
                 string->SizeBytes = stringLiteral->getByteLength();
