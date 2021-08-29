@@ -1,20 +1,29 @@
 // Copyright (c) Microsoft and Contributors. All rights reserved. Licensed under the University of Illinois/NCSA Open Source License. See LICENSE.txt in the project root for license information.
 
-// Ported from https://github.com/llvm/llvm-project/tree/llvmorg-10.0.0/clang/tools/libclang
+// Ported from https://github.com/llvm/llvm-project/tree/llvmorg-12.0.0/clang/tools/libclang
 // Original source is Copyright (c) the LLVM Project and Contributors. Licensed under the Apache License v2.0 with LLVM Exceptions. See NOTICE.txt in the project root for license information.
 
 #ifndef LIBCLANGSHARP_CXCURSOR_H
 #define LIBCLANGSHARP_CXCURSOR_H
 
+#pragma warning(push)
+#pragma warning(disable : 4146 4244 4267 4291 4624 4996)
+
 #include <clang/AST/Attr.h>
 #include <clang/AST/Decl.h>
+#include <clang/AST/DeclFriend.h>
+#include <clang/AST/DeclTemplate.h>
 #include <clang/AST/Expr.h>
+#include <clang/AST/ExprCXX.h>
+#include <clang/AST/ExprObjC.h>
 #include <clang/AST/Stmt.h>
 #include <clang/AST/TemplateName.h>
 #include <clang/Frontend/ASTUnit.h>
 #include "clang-c/Index.h"
 
 #include <llvm/ADT/PointerUnion.h>
+
+#pragma warning(pop)
 
 namespace clang {
 namespace cxcursor {
@@ -61,6 +70,7 @@ namespace cxcursor {
     const Attr* getCursorAttr(CXCursor Cursor);
     const Decl* getCursorDecl(CXCursor Cursor);
     const Expr* getCursorExpr(CXCursor Cursor);
+    const PreprocessedEntity* getCursorPreprocessedEntity(CXCursor Cursor);
     const Stmt* getCursorStmt(CXCursor Cursor);
 
     /// Unpack a CXXBaseSpecifier cursor into a CXXBaseSpecifier.
@@ -110,6 +120,11 @@ namespace cxcursor {
 
     // FIXME: Remove once we can model DeclGroups and their appropriate ranges properly in the ASTs.
     bool isFirstInDeclGroup(CXCursor C);
+
+    CXCursor MakeCXCursor(const Attr* A, const Decl* Parent, CXTranslationUnit TU);
+    CXCursor MakeCXCursor(const CXXBaseSpecifier* B, CXTranslationUnit TU);
+    CXCursor MakeCXCursor(const Decl* D, CXTranslationUnit TU, SourceRange RegionOfInterest = SourceRange(), bool FirstInDeclGroup = true);
+    CXCursor MakeCXCursor(const Stmt* S, const Decl* Parent, CXTranslationUnit TU, SourceRange RegionOfInterest = SourceRange());
 }
 }
 

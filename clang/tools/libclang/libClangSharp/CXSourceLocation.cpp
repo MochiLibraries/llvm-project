@@ -1,15 +1,20 @@
 // Copyright (c) Microsoft and Contributors. All rights reserved. Licensed under the University of Illinois/NCSA Open Source License. See LICENSE.txt in the project root for license information.
 
-// Ported from https://github.com/llvm/llvm-project/tree/llvmorg-10.0.0/clang/tools/libclang
+// Ported from https://github.com/llvm/llvm-project/tree/llvmorg-12.0.0/clang/tools/libclang
 // Original source is Copyright (c) the LLVM Project and Contributors. Licensed under the Apache License v2.0 with LLVM Exceptions. See NOTICE.txt in the project root for license information.
 
 #include "libClangSharp/ClangSharp.h"
 #include "libClangSharp/CXCursor.h"
 #include "libClangSharp/CXSourceLocation.h"
 
+#pragma warning(push)
+#pragma warning(disable : 4146 4244 4267 4291 4624 4996)
+
 #include <clang/Basic/SourceLocation.h>
 #include <clang/Frontend/ASTUnit.h>
 #include <clang/Lex/Lexer.h>
+
+#pragma warning(pop)
 
 void createNullLocation(CXFile* file, unsigned* line, unsigned* column, unsigned* offset) {
     if (file)
@@ -22,106 +27,22 @@ void createNullLocation(CXFile* file, unsigned* line, unsigned* column, unsigned
         *offset = 0;
 }
 
-clang::SourceRange getRawCursorExtent(CXCursor C) {
+clang::SourceRange getCursorSourceRange(CXCursor C) {
     using namespace clang;
     using namespace clang::cxcursor;
-
-    if (clang_isReference(C.kind)) {
-        switch (C.kind) {
-            case CXCursor_ObjCSuperClassRef:
-                return getCursorObjCSuperClassRef(C).second;
-
-            case CXCursor_ObjCProtocolRef:
-                return getCursorObjCProtocolRef(C).second;
-
-            case CXCursor_ObjCClassRef:
-                return getCursorObjCClassRef(C).second;
-
-            case CXCursor_TypeRef:
-                return getCursorTypeRef(C).second;
-
-            case CXCursor_TemplateRef:
-                return getCursorTemplateRef(C).second;
-
-            case CXCursor_NamespaceRef:
-                return getCursorNamespaceRef(C).second;
-
-            case CXCursor_MemberRef:
-                return getCursorMemberRef(C).second;
-
-            case CXCursor_CXXBaseSpecifier:
-                return getCursorCXXBaseSpecifier(C)->getSourceRange();
-
-            case CXCursor_LabelRef:
-                return getCursorLabelRef(C).second;
-
-            case CXCursor_OverloadedDeclRef:
-                return getCursorOverloadedDeclRef(C).second;
-
-            case CXCursor_VariableRef:
-                return getCursorVariableRef(C).second;
-
-            default:
-                // FIXME: Need a way to enumerate all non-reference cases.
-                llvm_unreachable("Missed a reference kind");
-        }
-    }
-
-    if (clang_isExpression(C.kind))
-        return getCursorExpr(C)->getSourceRange();
-
-    if (clang_isStatement(C.kind))
-        return getCursorStmt(C)->getSourceRange();
 
     if (clang_isAttribute(C.kind))
         return getCursorAttr(C)->getRange();
 
-    if (C.kind == CXCursor_PreprocessingDirective)
-        return getCursorPreprocessingDirective(C);
+    if (clang_isDeclaration(C.kind) || clang_isTranslationUnit(C.kind))
+        return getCursorDecl(C)->getSourceRange();
 
-    if (C.kind == CXCursor_MacroExpansion) {
-        ASTUnit* TU = getCursorASTUnit(C);
-        SourceRange Range = getCursorMacroExpansion(C).getSourceRange();
-        return TU->mapRangeFromPreamble(Range);
-    }
+    if (clang_isExpression(C.kind) || clang_isStatement(C.kind))
+        return getCursorStmt(C)->getSourceRange();
 
-    if (C.kind == CXCursor_MacroDefinition) {
-        ASTUnit* TU = getCursorASTUnit(C);
-        SourceRange Range = getCursorMacroDefinition(C)->getSourceRange();
-        return TU->mapRangeFromPreamble(Range);
-    }
+    if (clang_isPreprocessing(C.kind))
+        return getCursorPreprocessedEntity(C)->getSourceRange();
 
-    if (C.kind == CXCursor_InclusionDirective) {
-        ASTUnit* TU = getCursorASTUnit(C);
-        SourceRange Range = getCursorInclusionDirective(C)->getSourceRange();
-        return TU->mapRangeFromPreamble(Range);
-    }
-
-    if (C.kind == CXCursor_TranslationUnit) {
-        ASTUnit* TU = getCursorASTUnit(C);
-        FileID MainID = TU->getSourceManager().getMainFileID();
-        SourceLocation Start = TU->getSourceManager().getLocForStartOfFile(MainID);
-        SourceLocation End = TU->getSourceManager().getLocForEndOfFile(MainID);
-        return SourceRange(Start, End);
-    }
-
-    if (clang_isDeclaration(C.kind)) {
-        const Decl* D = getCursorDecl(C);
-        if (!D)
-            return SourceRange();
-
-        SourceRange R = D->getSourceRange();
-        // FIXME: Multiple variables declared in a single declaration
-        // currently lack the information needed to correctly determine their
-        // ranges when accounting for the type-specifier. We use context
-        // stored in the CXCursor to determine if the VarDecl is in a DeclGroup,
-        // and if so, whether it is the first decl.
-        if (const VarDecl* VD = dyn_cast<VarDecl>(D)) {
-            if (!isFirstInDeclGroup(C))
-                R.setBegin(VD->getLocation());
-        }
-        return R;
-    }
     return SourceRange();
 }
 
@@ -133,8 +54,31 @@ bool isASTUnitSourceLocation(const CXSourceLocation& L) {
 
 namespace clang {
 namespace cxloc {
+    CXSourceLocation translateSourceLocation(ASTContext& Context, SourceLocation Loc) {
+        return translateSourceLocation(Context.getSourceManager(), Context.getLangOpts(), Loc);
+    }
+    CXSourceLocation translateSourceLocation(const SourceManager& SM, const LangOptions& LangOpts, SourceLocation Loc) {
+        if (Loc.isInvalid())
+            return clang_getNullLocation();
+
+        CXSourceLocation Result = {
+            { &SM, &LangOpts, },
+            Loc.getRawEncoding()
+        };
+        return Result;
+    }
+
     CXSourceRange translateSourceRange(ASTContext& Context, SourceRange R) {
-        return translateSourceRange(Context.getSourceManager(), Context.getLangOpts(), CharSourceRange::getTokenRange(R));
+        return translateSourceRange(Context.getSourceManager(), Context.getLangOpts(), R);
+    }
+
+    CXSourceRange translateSourceRange(const SourceManager& SM, const LangOptions& LangOpts, SourceRange R) {
+        CXSourceRange Result = {
+            { &SM, &LangOpts },
+            R.getBegin().getRawEncoding(),
+            R.getEnd().getRawEncoding()
+        };
+        return Result;
     }
 }
 }

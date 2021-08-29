@@ -1,7 +1,7 @@
 libClangSharp
 ===============================================================================
 
-This directory contains a (slightly modified) copy if libClangSharp. It is based on 2126c1f2a407e29fe90be5e603da861c3932c34f.
+This directory contains a (slightly modified) copy if libClangSharp. It is based on 700c8057fb55b67c604452fae9dc6cc0118f7bb6.
 
 We build it in with the rest of Clang to avoid issues with having multiple copies of Clang's inline functions and to simplify our native dependencies. The version of ClangSharp used must still match libClangSharp here.
 
@@ -10,6 +10,8 @@ Changes made:
 * Removed use of nested namespace definitions (These are a C++17 feature, libclang is not built as C++17.)
 * Fixed up includes
 * Removed duplicate private libclang definitions
+* Manually wrote `ClangSharp_export.h` to undo [ClangSharp#247](https://github.com/microsoft/ClangSharp/pull/247)
+* Disabled `-Wunused-variable` in `ClangSharp.cpp`
 
 ## License
 
