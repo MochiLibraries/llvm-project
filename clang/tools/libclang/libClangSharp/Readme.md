@@ -12,6 +12,7 @@ Changes made:
 * Removed duplicate private libclang definitions
 * Manually wrote `ClangSharp_export.h` to undo [ClangSharp#247](https://github.com/microsoft/ClangSharp/pull/247)
 * Disabled `-Wunused-variable` in `ClangSharp.cpp`
+* Fixed `clangsharp_Cursor_getDefinition` not handling cursors with no definition.
 
 ## License
 
