@@ -1,6 +1,6 @@
 # LLVM Compiler Infrastructure - Pathogen Fork
 
-This fork extends the functionality of libclang. It is currently based on [LLVM 10.0.0](https://github.com/llvm/llvm-project/tree/d32170dbd5b0d54436537b6b75beaf44324e0c28).
+This fork extends the functionality of libclang. It is currently based on [LLVM 12.0.1](https://github.com/llvm/llvm-project/commit/fed41342a82f5a3a9201819a82bf7a48313e296b).
 
 This fork exists primarily to support [Biohazrd](https://github.com/InfectedLibraries/Biohazrd) via [ClangSharp.Pathogen](https://github.com/InfectedLibraries/ClangSharp.Pathogen). The API is generally designed to simplify calling from C# and little-to-no effort has been put in to making the API consistent.
 

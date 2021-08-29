@@ -1284,7 +1284,7 @@ CXStringSet* pathogen_IsFunctionTypeCallable(CXTranslationUnit translationUnit, 
                 type.print(diagnostic, printingPolicy);
                 diagnostic << "' is incomplete.";
 
-                Diagnostics.push_back(diagnostic.str());
+                Diagnostics.push_back((std::string)diagnostic.str());
             }
 
         public:
@@ -1608,6 +1608,7 @@ enum class PathogenArgumentKind : uint8_t
     Direct,
     Extend,
     Indirect,
+    IndirectAliased,
     Ignore,
     Expand,
     CoerceAndExpand,
@@ -1617,6 +1618,7 @@ enum class PathogenArgumentKind : uint8_t
 verify_argument_kind(Direct);
 verify_argument_kind(Extend);
 verify_argument_kind(Indirect);
+verify_argument_kind(IndirectAliased);
 verify_argument_kind(Ignore);
 verify_argument_kind(Expand);
 verify_argument_kind(CoerceAndExpand);
@@ -1662,9 +1664,12 @@ struct PathogenArgumentInfo
     PathogenArgumentFlags Flags;
 
     // For Kind = Direct or Extend: DirectOffset
-    // For Kind = Inidrect: IndirectAlignment
+    // For Kind = Inidrect or IndirectAliased: IndirectAlignment
     // For Kind = InAlloca: AllocaFieldIndex
     uint32_t Extra;
+
+    // For Kind = IndirectAliased: IndirectAddrSpace
+    uint32_t Extra2;
 };
 
 struct PathogenArrangedFunction
@@ -1719,7 +1724,7 @@ static void pathogen_CreateArgumentInfo(CXTranslationUnit translationUnit, CanQu
             
             output->Extra = info.getDirectOffset();
             break;
-        case ABIArgInfo::Indirect:;
+        case ABIArgInfo::Indirect:
             if (info.getIndirectByVal())
             {
                 output->Flags |= PathogenArgumentFlags::IsIndirectByVal;
@@ -1736,6 +1741,15 @@ static void pathogen_CreateArgumentInfo(CXTranslationUnit translationUnit, CanQu
             }
 
             output->Extra = info.getIndirectAlign().getQuantity();
+            break;
+        case ABIArgInfo::IndirectAliased:
+            if (info.getIndirectRealign())
+            {
+                output->Flags |= PathogenArgumentFlags::IsIndirectRealign;
+            }
+
+            output->Extra = info.getIndirectAlign().getQuantity();
+            output->Extra2 = info.getIndirectAddrSpace();
             break;
         case ABIArgInfo::Ignore:
         case ABIArgInfo::Expand:
