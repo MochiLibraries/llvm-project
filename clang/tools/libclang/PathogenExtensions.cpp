@@ -884,6 +884,8 @@ struct PathogenMacroInformation
     const char** ParameterNames;
     uint64_t* ParameterNameLengths;
     int TokenCount;
+    const char* RawValueSourceString;
+    uint64_t RawValueSourceStringLength;
 };
 
 typedef void (*MacroEnumeratorFunction)(PathogenMacroInformation* macroInfo, void* userData);
@@ -905,6 +907,8 @@ PATHOGEN_EXPORT void pathogen_EnumerateMacros(CXTranslationUnit translationUnit,
     const int stackParameterListCount = 16;
     SmallVector<const char*, stackParameterListCount> parameterNames;
     SmallVector<uint64_t, stackParameterListCount> parameterNameLengths;
+
+    SmallString<128> rawValueSourceStringStorage;
 
     for (auto it = idTable.begin(); it != idTable.end(); it++)
     {
@@ -932,6 +936,7 @@ PATHOGEN_EXPORT void pathogen_EnumerateMacros(CXTranslationUnit translationUnit,
         pathogenInfo.ParameterCount = macroInfo->getNumParams();
         pathogenInfo.TokenCount = macroInfo->getNumTokens();
 
+        // Create array of parameter names
         parameterNames.clear();
         parameterNameLengths.clear();
         parameterNames.reserve(pathogenInfo.ParameterCount);
@@ -946,6 +951,31 @@ PATHOGEN_EXPORT void pathogen_EnumerateMacros(CXTranslationUnit translationUnit,
         pathogenInfo.ParameterNames = parameterNames.data();
         pathogenInfo.ParameterNameLengths = parameterNameLengths.data();
 
+        // Create a string for the value of the macro
+        // (This is based on the logic in MacroInfo::dump)
+        rawValueSourceStringStorage.clear();
+        llvm::raw_svector_ostream rawValueSourceString(rawValueSourceStringStorage);
+
+        for (const Token& token : macroInfo->tokens())
+        {
+            if (token.hasLeadingSpace())
+            { rawValueSourceString << " "; }
+
+            if (const char* punctuator = tok::getPunctuatorSpelling(token.getKind()))
+            { rawValueSourceString << punctuator; }
+            else if (token.isLiteral() && token.getLiteralData())
+            { rawValueSourceString << StringRef(token.getLiteralData(), token.getLength()); }
+            else if (clang::IdentifierInfo* identifierInfo = token.getIdentifierInfo())
+            { rawValueSourceString << identifierInfo->getName(); }
+            else
+            { rawValueSourceString << token.getName(); }
+        }
+
+        llvm::StringRef rawValueSourceStringRef = rawValueSourceString.str();
+        pathogenInfo.RawValueSourceString = rawValueSourceStringRef.data();
+        pathogenInfo.RawValueSourceStringLength = rawValueSourceStringRef.size();
+
+        // Enumerate the macro
         enumerator(&pathogenInfo, userData);
     }
 }
