@@ -878,10 +878,12 @@ struct PathogenMacroInformation
     interop_bool IsBuiltInMacro;
     //! True if this macro contains the sequence ", ## __VA_ARGS__"
     interop_bool HasCommaPasting;
+    interop_bool IsUsedForHeaderGuard;
     PathogenMacroVardicKind VardicKind;
     int ParameterCount;
     const char** ParameterNames;
     uint64_t* ParameterNameLengths;
+    int TokenCount;
 };
 
 typedef void (*MacroEnumeratorFunction)(PathogenMacroInformation* macroInfo, void* userData);
@@ -925,8 +927,10 @@ PATHOGEN_EXPORT void pathogen_EnumerateMacros(CXTranslationUnit translationUnit,
         pathogenInfo.IsFunctionLike = macroInfo->isFunctionLike();
         pathogenInfo.IsBuiltInMacro = macroInfo->isBuiltinMacro();
         pathogenInfo.HasCommaPasting = macroInfo->hasCommaPasting();
+        pathogenInfo.IsUsedForHeaderGuard = macroInfo->isUsedForHeaderGuard();
         pathogenInfo.VardicKind = macroInfo->isC99Varargs() ? PathogenMacroVardicKind::C99 : macroInfo->isGNUVarargs() ? PathogenMacroVardicKind::Gnu : PathogenMacroVardicKind::None;
         pathogenInfo.ParameterCount = macroInfo->getNumParams();
+        pathogenInfo.TokenCount = macroInfo->getNumTokens();
 
         parameterNames.clear();
         parameterNameLengths.clear();
