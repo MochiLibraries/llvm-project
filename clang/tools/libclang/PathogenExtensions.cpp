@@ -795,7 +795,7 @@ PATHOGEN_EXPORT bool pathogen_ComputeConstantValue(CXCursor cursor, PathogenCons
         info->SubKind = (int)floatValue.getSizeInBits(floatValue.getSemantics());
         info->Value = floatValue.bitcastToAPInt().getZExtValue();
     }
-    else if (value.isNullPointer())
+    else if (value.isLValue() && value.isNullPointer())
     {
         info->Kind = PathogenConstantValueKind::NullPointer;
         info->SubKind = 0;
