@@ -1494,6 +1494,7 @@ enum class PathogenLlvmCallingConventionKind : uint8_t
     CXX_FAST_TLS = 17,
     Tail = 18,
     CFGuard_Check = 19,
+    SwiftTail = 20,
     FirstTargetCC = 64,
     X86_StdCall = 64,
     X86_FastCall = 65,
@@ -1528,7 +1529,9 @@ enum class PathogenLlvmCallingConventionKind : uint8_t
     AMDGPU_ES = 96,
     AArch64_VectorCall = 97,
     AArch64_SVE_VectorCall = 98,
-    WASM_EmscriptenInvoke = 99
+    WASM_EmscriptenInvoke = 99,
+    AMDGPU_Gfx = 100,
+    M68k_INTR = 101,
 };
 #define verify_llvm_calling_convention_kind(KIND) static_assert((int)(PathogenLlvmCallingConventionKind::KIND) == ((int)llvm::CallingConv::KIND), "LLVM " #KIND " must match Pathogen " #KIND);
 verify_llvm_calling_convention_kind(C);
@@ -1544,6 +1547,7 @@ verify_llvm_calling_convention_kind(Swift);
 verify_llvm_calling_convention_kind(CXX_FAST_TLS);
 verify_llvm_calling_convention_kind(Tail);
 verify_llvm_calling_convention_kind(CFGuard_Check);
+verify_llvm_calling_convention_kind(SwiftTail);
 verify_llvm_calling_convention_kind(FirstTargetCC);
 verify_llvm_calling_convention_kind(X86_StdCall);
 verify_llvm_calling_convention_kind(X86_FastCall);
@@ -1579,6 +1583,8 @@ verify_llvm_calling_convention_kind(AMDGPU_ES);
 verify_llvm_calling_convention_kind(AArch64_VectorCall);
 verify_llvm_calling_convention_kind(AArch64_SVE_VectorCall);
 verify_llvm_calling_convention_kind(WASM_EmscriptenInvoke);
+verify_llvm_calling_convention_kind(AMDGPU_Gfx);
+verify_llvm_calling_convention_kind(M68k_INTR);
 
 enum class PathogenClangCallingConventionKind : uint8_t
 {
@@ -1597,6 +1603,7 @@ enum class PathogenClangCallingConventionKind : uint8_t
     SpirFunction,
     OpenCLKernel,
     Swift,
+    SwiftAsync,
     PreserveMost,
     PreserveAll,
     AArch64VectorCall,
@@ -1617,6 +1624,7 @@ verify_clang_calling_convention_kind(IntelOclBicc, CC_IntelOclBicc);
 verify_clang_calling_convention_kind(SpirFunction, CC_SpirFunction);
 verify_clang_calling_convention_kind(OpenCLKernel, CC_OpenCLKernel);
 verify_clang_calling_convention_kind(Swift, CC_Swift);
+verify_clang_calling_convention_kind(SwiftAsync, CC_SwiftAsync);
 verify_clang_calling_convention_kind(PreserveMost, CC_PreserveMost);
 verify_clang_calling_convention_kind(PreserveAll, CC_PreserveAll);
 verify_clang_calling_convention_kind(AArch64VectorCall, CC_AArch64VectorCall);
