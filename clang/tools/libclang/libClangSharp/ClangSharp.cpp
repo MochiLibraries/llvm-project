@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft and Contributors. All rights reserved. Licensed under the University of Illinois/NCSA Open Source License. See LICENSE.txt in the project root for license information.
+// Copyright (c) .NET Foundation and Contributors. All Rights Reserved. Licensed under the MIT License (MIT). See License.md in the repository root for more information.
 
 #include "libClangSharp/ClangSharp.h"
 #include "libClangSharp/CXCursor.h"
@@ -4749,6 +4749,10 @@ int64_t clangsharp_Cursor_getVtblIdx(CXCursor C) {
     return -1;
 }
 
+CXString clangsharp_getVersion() {
+    return cxstring::createDup("clangsharp version 14.0.4 (ClangSharp.Pathogen fork)");
+}
+
 void clangsharp_TemplateArgument_dispose(CX_TemplateArgument T) {
     if (T.xdata & 1) {
         return delete T.value;
@@ -5162,11 +5166,11 @@ unsigned clangsharp_Type_getIsSigned(CXType CT) {
     QualType T = GetQualType(CT);
     const Type* TP = T.getTypePtrOrNull();
 
-    if (const DependentExtIntType* DEIT = dyn_cast<DependentExtIntType>(TP)) {
+    if (const DependentBitIntType* DEIT = dyn_cast<DependentBitIntType>(TP)) {
         return DEIT->isSigned();
     }
 
-    if (const ExtIntType* EIT = dyn_cast<ExtIntType>(TP)) {
+    if (const BitIntType* EIT = dyn_cast<BitIntType>(TP)) {
         return EIT->isSigned();
     }
 
@@ -5202,11 +5206,11 @@ unsigned clangsharp_Type_getIsUnsigned(CXType CT) {
     QualType T = GetQualType(CT);
     const Type* TP = T.getTypePtrOrNull();
 
-    if (const DependentExtIntType* DEIT = dyn_cast<DependentExtIntType>(TP)) {
+    if (const DependentBitIntType* DEIT = dyn_cast<DependentBitIntType>(TP)) {
         return DEIT->isUnsigned();
     }
 
-    if (const ExtIntType* EIT = dyn_cast<ExtIntType>(TP)) {
+    if (const BitIntType* EIT = dyn_cast<BitIntType>(TP)) {
         return EIT->isUnsigned();
     }
 
@@ -5228,7 +5232,7 @@ int clangsharp_Type_getNumBits(CXType CT) {
     QualType T = GetQualType(CT);
     const Type* TP = T.getTypePtrOrNull();
 
-    if (const ExtIntType* EIT = dyn_cast<ExtIntType>(TP)) {
+    if (const BitIntType* EIT = dyn_cast<BitIntType>(TP)) {
         return EIT->getNumBits();
     }
 
@@ -5239,7 +5243,7 @@ CXCursor clangsharp_Type_getNumBitsExpr(CXType CT) {
     QualType T = GetQualType(CT);
     const Type* TP = T.getTypePtrOrNull();
 
-    if (const DependentExtIntType* DEIT = dyn_cast<DependentExtIntType>(TP)) {
+    if (const DependentBitIntType* DEIT = dyn_cast<DependentBitIntType>(TP)) {
         CXCursor C = clang_getTypeDeclaration(CT);
         return MakeCXCursor(DEIT->getNumBitsExpr(), getCursorDecl(C), GetTypeTU(CT));
     }
@@ -5402,6 +5406,14 @@ CX_TemplateArgument clangsharp_Type_getTemplateArgument(CXType CT, unsigned i) {
     if (const TemplateSpecializationType* TST = dyn_cast<TemplateSpecializationType>(TP)) {
         if (i < TST->getNumArgs()) {
             return MakeCXTemplateArgument(&TST->getArg(i), GetTypeTU(CT));
+        }
+    }
+
+    // Matching what clang_Type_getNumTemplateArguments/Type.GetTemplateArguments is doing here
+    if (const auto* RecordDecl = T->getAsCXXRecordDecl()) {
+        const auto* TemplateDecl = dyn_cast<ClassTemplateSpecializationDecl>(RecordDecl);
+        if (TemplateDecl && i < TemplateDecl->getTemplateArgs().size()) {
+            return MakeCXTemplateArgument(&TemplateDecl->getTemplateArgs()[i], GetTypeTU(CT));
         }
     }
 

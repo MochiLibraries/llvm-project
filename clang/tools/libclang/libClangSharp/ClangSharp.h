@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft and Contributors. All rights reserved. Licensed under the University of Illinois/NCSA Open Source License. See LICENSE.txt in the project root for license information.
+// Copyright (c) .NET Foundation and Contributors. All Rights Reserved. Licensed under the MIT License (MIT). See License.md in the repository root for more information.
 
 #ifndef LIBCLANGSHARP_CLANGSHARP_H
 #define LIBCLANGSHARP_CLANGSHARP_H
@@ -725,6 +725,8 @@ CLANGSHARP_LINKAGE CXCursor clangsharp_Cursor_getVBase(CXCursor C, unsigned i);
 CLANGSHARP_LINKAGE int64_t clangsharp_Cursor_getDtorVtblIdx(CXCursor C, CX_DestructorType dtor);
 
 CLANGSHARP_LINKAGE int64_t clangsharp_Cursor_getVtblIdx(CXCursor C);
+
+CLANGSHARP_LINKAGE CXString clangsharp_getVersion();
 
 CLANGSHARP_LINKAGE void clangsharp_TemplateArgument_dispose(CX_TemplateArgument T);
 
