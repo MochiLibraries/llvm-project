@@ -42,11 +42,6 @@ enum CX_AttrKind {
 #include <clang/Basic/AttrList.inc>
 };
 
-enum CX_BinaryOperatorKind {
-    CX_BO_Invalid,
-#define BINARY_OPERATION(Name, Spelling) CX_BO_##Name,
-#include <clang/AST/OperationKinds.def>
-};
 
 enum CX_CapturedRegionKind {
     CX_CR_Invalid,
@@ -63,19 +58,19 @@ enum CX_CastKind {
 
 enum CX_CharacterKind {
     CX_CLK_Invalid,
-    CX_CLK_Ascii = clang::CharacterLiteral::Ascii + 1,
-    CX_CLK_Wide = clang::CharacterLiteral::Wide + 1,
-    CX_CLK_UTF8 = clang::CharacterLiteral::UTF8 + 1,
-    CX_CLK_UTF16 = clang::CharacterLiteral::UTF16 + 1,
-    CX_CLK_UTF32 = clang::CharacterLiteral::UTF32 + 1,
+    CX_CLK_Ascii = static_cast<int>(clang::CharacterLiteralKind::Ascii) + 1,
+    CX_CLK_Wide = static_cast<int>(clang::CharacterLiteralKind::Wide) + 1,
+    CX_CLK_UTF8 = static_cast<int>(clang::CharacterLiteralKind::UTF8) + 1,
+    CX_CLK_UTF16 = static_cast<int>(clang::CharacterLiteralKind::UTF16) + 1,
+    CX_CLK_UTF32 = static_cast<int>(clang::CharacterLiteralKind::UTF32) + 1,
 };
 
 enum CX_ConstructionKind {
     _CX_CK_Invalid,
-    CX_CK_Complete = clang::CXXConstructExpr::CK_Complete + 1,
-    CX_CK_NonVirtualBase = clang::CXXConstructExpr::CK_NonVirtualBase + 1,
-    CX_CK_VirtualBase = clang::CXXConstructExpr::CK_VirtualBase + 1,
-    CX_CK_Delegating = clang::CXXConstructExpr::CK_Delegating + 1
+    CX_CK_Complete = static_cast<int>(clang::CXXConstructionKind::Complete) + 1,
+    CX_CK_NonVirtualBase = static_cast<int>(clang::CXXConstructionKind::NonVirtualBase) + 1,
+    CX_CK_VirtualBase = static_cast<int>(clang::CXXConstructionKind::VirtualBase) + 1,
+    CX_CK_Delegating = static_cast<int>(clang::CXXConstructionKind::Delegating) + 1
 };
 
 enum CX_DeclKind {
@@ -109,9 +104,16 @@ enum CX_FloatingSemantics {
     CX_FLK_BFloat = llvm::APFloatBase::S_BFloat + 1,
     CX_FLK_IEEEsingle = llvm::APFloatBase::S_IEEEsingle + 1,
     CX_FLK_IEEEdouble = llvm::APFloatBase::S_IEEEdouble + 1,
-    CX_FLK_x87DoubleExtended = llvm::APFloatBase::S_x87DoubleExtended + 1,
     CX_FLK_IEEEquad = llvm::APFloatBase::S_IEEEquad + 1,
     CX_FLK_PPCDoubleDouble = llvm::APFloatBase::S_PPCDoubleDouble + 1,
+    CX_FLK_Float8E5M2 = llvm::APFloatBase::S_Float8E5M2 + 1,
+    CX_FLK_Float8E5M2FNUZ = llvm::APFloatBase::S_Float8E5M2FNUZ + 1,
+    CX_FLK_Float8E4M3FN = llvm::APFloatBase::S_Float8E4M3FN + 1,
+    CX_FLK_Float8E4M3FNUZ = llvm::APFloatBase::S_Float8E4M3FNUZ + 1,
+    CX_FLK_Float8E4M3B11FNUZ = llvm::APFloatBase::S_Float8E4M3B11FNUZ + 1,
+    CX_FLK_FloatTF32 = llvm::APFloatBase::S_FloatTF32 + 1,
+    CX_FLK_x87DoubleExtended = llvm::APFloatBase::S_x87DoubleExtended + 1,
+    CX_FLK_MaxSemantics = llvm::APFloatBase::S_MaxSemantics + 1,
 };
 
 enum CX_OverloadedOperatorKind {
@@ -128,6 +130,16 @@ enum CX_StmtClass {
 #define LAST_STMT_RANGE(BASE, FIRST, LAST) CX_StmtClass_First##BASE = CX_StmtClass_##FIRST, CX_StmtClass_Last##BASE = CX_StmtClass_##LAST
 #define ABSTRACT_STMT(STMT)
 #include <clang/AST/StmtNodes.inc>
+};
+
+enum CX_StringKind {
+    CX_SLK_Invalid,
+    CX_SLK_Ordinary = static_cast<int>(clang::StringLiteralKind::Ordinary) + 1,
+    CX_SLK_Wide = static_cast<int>(clang::StringLiteralKind::Wide) + 1,
+    CX_SLK_UTF8 = static_cast<int>(clang::StringLiteralKind::UTF8) + 1,
+    CX_SLK_UTF16 = static_cast<int>(clang::StringLiteralKind::UTF16) + 1,
+    CX_SLK_UTF32 = static_cast<int>(clang::StringLiteralKind::UTF32) + 1,
+    CX_SLK_Unevaluated = static_cast<int>(clang::StringLiteralKind::Unevaluated) + 1,
 };
 
 enum CX_TemplateArgumentDependence {
@@ -148,7 +160,8 @@ enum CX_TemplateNameKind {
     CX_TNK_QualifiedTemplate = clang::TemplateName::QualifiedTemplate + 1,
     CX_TNK_DependentTemplate = clang::TemplateName::DependentTemplate + 1,
     CX_TNK_SubstTemplateTemplateParm = clang::TemplateName::SubstTemplateTemplateParm + 1,
-    CX_TNK_SubstTemplateTemplateParmPack = clang::TemplateName::SubstTemplateTemplateParmPack + 1
+    CX_TNK_SubstTemplateTemplateParmPack = clang::TemplateName::SubstTemplateTemplateParmPack + 1,
+    CX_TNK_UsingTemplate = clang::TemplateName::UsingTemplate + 1,
 };
 
 enum CX_TemplateSpecializationKind {
@@ -178,12 +191,6 @@ enum CX_UnaryExprOrTypeTrait {
  #define UNARY_EXPR_OR_TYPE_TRAIT(Spelling, Name, Key) +1
  #define CXX11_UNARY_EXPR_OR_TYPE_TRAIT(Spelling, Name, Key) +1
  #include "clang/Basic/TokenKinds.def"
-};
-
-enum CX_UnaryOperatorKind {
-    CX_UO_Invalid,
-#define UNARY_OPERATION(Name, Spelling) CX_UO_##Name,
-#include <clang/AST/OperationKinds.def>
 };
 
 enum CX_VariableCaptureKind {
@@ -238,9 +245,7 @@ CLANGSHARP_LINKAGE CX_AttrKind clangsharp_Cursor_getAttrKind(CXCursor C);
 
 CLANGSHARP_LINKAGE CXCursor clangsharp_Cursor_getBase(CXCursor C, unsigned i);
 
-CLANGSHARP_LINKAGE CX_BinaryOperatorKind clangsharp_Cursor_getBinaryOpcode(CXCursor C);
-
-CLANGSHARP_LINKAGE CXString clangsharp_Cursor_getBinaryOpcodeSpelling(CX_BinaryOperatorKind Op);
+CLANGSHARP_LINKAGE CXBinaryOperatorKind clangsharp_Cursor_getBinaryOpcode(CXCursor C);
 
 CLANGSHARP_LINKAGE CXCursor clangsharp_Cursor_getBindingDecl(CXCursor C, unsigned i);
 
@@ -384,6 +389,10 @@ CLANGSHARP_LINKAGE unsigned clangsharp_Cursor_getHasBody(CXCursor C);
 
 CLANGSHARP_LINKAGE unsigned clangsharp_Cursor_getHasDefaultArg(CXCursor C);
 
+CLANGSHARP_LINKAGE unsigned clangsharp_Cursor_getHasUnparsedDefaultArg(CXCursor C);
+
+CLANGSHARP_LINKAGE unsigned clangsharp_Cursor_getHasUninstantiatedDefaultArg(CXCursor C);
+
 CLANGSHARP_LINKAGE unsigned clangsharp_Cursor_getHasElseStorage(CXCursor C);
 
 CLANGSHARP_LINKAGE unsigned clangsharp_Cursor_getHasExplicitTemplateArgs(CXCursor C);
@@ -449,6 +458,8 @@ CLANGSHARP_LINKAGE unsigned clangsharp_Cursor_getIsArrayForm(CXCursor C);
 CLANGSHARP_LINKAGE unsigned clangsharp_Cursor_getIsArrayFormAsWritten(CXCursor C);
 
 CLANGSHARP_LINKAGE unsigned clangsharp_Cursor_getIsArrow(CXCursor C);
+
+CLANGSHARP_LINKAGE unsigned clangsharp_Cursor_getIsCBuffer(CXCursor C);
 
 CLANGSHARP_LINKAGE unsigned clangsharp_Cursor_getIsClassExtension(CXCursor C);
 
@@ -520,7 +531,7 @@ CLANGSHARP_LINKAGE unsigned clangsharp_Cursor_getIsPartiallySubstituted(CXCursor
 
 CLANGSHARP_LINKAGE unsigned clangsharp_Cursor_getIsPotentiallyEvaluated(CXCursor C);
 
-CLANGSHARP_LINKAGE unsigned clangsharp_Cursor_getIsPure(CXCursor C);
+CLANGSHARP_LINKAGE unsigned clangsharp_Cursor_getIsPureVirtual(CXCursor C);
 
 CLANGSHARP_LINKAGE unsigned clangsharp_Cursor_getIsResultDependent(CXCursor C);
 
@@ -612,6 +623,8 @@ CLANGSHARP_LINKAGE int clangsharp_Cursor_getNumExpansionTypes(CXCursor C);
 
 CLANGSHARP_LINKAGE int clangsharp_Cursor_getNumExprs(CXCursor C);
 
+CLANGSHARP_LINKAGE int clangsharp_Cursor_getNumExprsOther(CXCursor C);
+
 CLANGSHARP_LINKAGE int clangsharp_Cursor_getNumFields(CXCursor C);
 
 CLANGSHARP_LINKAGE int clangsharp_Cursor_getNumFriends(CXCursor C);
@@ -664,9 +677,13 @@ CLANGSHARP_LINKAGE unsigned clangsharp_Cursor_getShouldCopy(CXCursor C);
 
 CLANGSHARP_LINKAGE CXSourceRange clangsharp_Cursor_getSourceRange(CXCursor C);
 
+CLANGSHARP_LINKAGE CXSourceRange clangsharp_Cursor_getSourceRangeRaw(CXCursor C);
+
 CLANGSHARP_LINKAGE CXCursor clangsharp_Cursor_getSpecialization(CXCursor C, unsigned i);
 
 CLANGSHARP_LINKAGE CX_StmtClass clangsharp_Cursor_getStmtClass(CXCursor C);
+
+CLANGSHARP_LINKAGE CX_StringKind clangsharp_Cursor_getStringLiteralKind(CXCursor C);
 
 CLANGSHARP_LINKAGE CXString clangsharp_Cursor_getStringLiteralValue(CXCursor C);
 
@@ -709,10 +726,6 @@ CLANGSHARP_LINKAGE CXCursor clangsharp_Cursor_getTypedefNameForAnonDecl(CXCursor
 CLANGSHARP_LINKAGE CXType clangsharp_Cursor_getTypeOperand(CXCursor C);
 
 CLANGSHARP_LINKAGE CX_UnaryExprOrTypeTrait clangsharp_Cursor_getUnaryExprOrTypeTraitKind(CXCursor C);
-
-CLANGSHARP_LINKAGE CX_UnaryOperatorKind clangsharp_Cursor_getUnaryOpcode(CXCursor C);
-
-CLANGSHARP_LINKAGE CXString clangsharp_Cursor_getUnaryOpcodeSpelling(CX_UnaryOperatorKind Op);
 
 CLANGSHARP_LINKAGE CXCursor clangsharp_Cursor_getUnderlyingDecl(CXCursor C);
 
@@ -771,6 +784,8 @@ CLANGSHARP_LINKAGE CXCursor clangsharp_TemplateArgumentLoc_getSourceIntegralExpr
 CLANGSHARP_LINKAGE CXCursor clangsharp_TemplateArgumentLoc_getSourceNullPtrExpression(CX_TemplateArgumentLoc T);
 
 CLANGSHARP_LINKAGE CXSourceRange clangsharp_TemplateArgumentLoc_getSourceRange(CX_TemplateArgumentLoc T);
+
+CLANGSHARP_LINKAGE CXSourceRange clangsharp_TemplateArgumentLoc_getSourceRangeRaw(CX_TemplateArgumentLoc T);
 
 CLANGSHARP_LINKAGE CXCursor clangsharp_TemplateName_getAsTemplateDecl(CX_TemplateName T);
 

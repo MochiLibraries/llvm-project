@@ -7,9 +7,8 @@ We build it in with the rest of Clang to avoid issues with having multiple copie
 
 Changes made:
 
-* Removed use of nested namespace definitions (These are a C++17 feature, libclang is not built as C++17.)
-* Fixed up includes
-* Removed duplicate private libclang definitions
+* Fixed up includes to allow building within Clang
+* Removed functions already defined within libclang (intentionally `#if 0`'d out to make diffs cleaner)
 * Manually wrote `ClangSharp_export.h` to undo [ClangSharp#247](https://github.com/dotnet/ClangSharp/pull/247)
 * Disabled `-Wunused-variable` in `ClangSharp.cpp`
 * Modified `clangsharp_getVersion` to indicate it's for the ClangSharp.Pathogen fork.

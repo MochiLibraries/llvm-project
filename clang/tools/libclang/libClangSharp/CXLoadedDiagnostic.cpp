@@ -1,6 +1,6 @@
 // Copyright (c) .NET Foundation and Contributors. All Rights Reserved. Licensed under the MIT License (MIT). See License.md in the repository root for more information.
 
-// Ported from https://github.com/llvm/llvm-project/tree/llvmorg-14.0.0/clang/tools/libclang
+// Ported from https://github.com/llvm/llvm-project/tree/llvmorg-18.1.3/clang/tools/libclang
 // Original source is Copyright (c) the LLVM Project and Contributors. Licensed under the Apache License v2.0 with LLVM Exceptions. See NOTICE.txt in the project root for license information.
 
 #include "libClangSharp/CXLoadedDiagnostic.h"
@@ -16,7 +16,8 @@
 
 namespace clang {
 #if 0
-    CXLoadedDiagnostic::~CXLoadedDiagnostic() { }
+    CXLoadedDiagnostic::~CXLoadedDiagnostic() {
+    }
 
     CXDiagnosticSeverity CXLoadedDiagnostic::getSeverity() const {
         // FIXME: Fail more softly if the diagnostic level is unknown?
@@ -43,7 +44,13 @@ namespace clang {
         // is a persistent diagnostic.
         uintptr_t V = (uintptr_t)DLoc;
         V |= 0x1;
-        CXSourceLocation Loc = { {  (void*)V, nullptr }, 0 };
+        CXSourceLocation Loc = {
+            {
+                (void*)V,
+                nullptr
+            },
+            0
+        };
         return Loc;
     }
 
@@ -58,12 +65,15 @@ namespace clang {
     }
 
     CXString CXLoadedDiagnostic::getDiagnosticOption(CXString* Disable) const {
-        if (DiagOption.empty())
+        if (DiagOption.empty()) {
             return cxstring::createEmpty();
+        }
 
         // FIXME: possibly refactor with logic in CXStoredDiagnostic.
-        if (Disable)
+        if (Disable) {
             *Disable = cxstring::createDup((llvm::Twine("-Wno-") + DiagOption).str());
+        }
+
         return cxstring::createDup((llvm::Twine("-W") + DiagOption).str());
     }
 
@@ -90,8 +100,10 @@ namespace clang {
 
     CXString CXLoadedDiagnostic::getFixIt(unsigned FixIt, CXSourceRange* ReplacementRange) const {
         assert(FixIt < FixIts.size());
-        if (ReplacementRange)
+
+        if (ReplacementRange) {
             *ReplacementRange = FixIts[FixIt].first;
+        }
         return cxstring::createRef(FixIts[FixIt].second);
     }
 
@@ -113,14 +125,21 @@ namespace clang {
 
         const Location& Loc = *((Location*)V);
 
-        if (file)
+        if (file) {
             *file = Loc.file;
-        if (line)
+        }
+
+        if (line) {
             *line = Loc.line;
-        if (column)
+        }
+
+        if (column) {
             *column = Loc.column;
-        if (offset)
+        }
+
+        if (offset) {
             *offset = Loc.offset;
+        }
     }
-    #endif
+#endif
 }

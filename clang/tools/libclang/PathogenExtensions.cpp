@@ -142,7 +142,7 @@ struct PathogenVTableEntry
         MethodDeclaration = {};
         RttiType = {};
         Offset = 0;
-        
+
         switch (Kind)
         {
             case PathogenVTableEntryKind::VCallOffset:
@@ -324,7 +324,7 @@ PATHOGEN_EXPORT PathogenRecordLayout* pathogen_GetRecordLayout(CXCursor cursor)
     PathogenRecordLayout* ret = new PathogenRecordLayout();
     ret->Size = layout.getSize().getQuantity();
     ret->Alignment = layout.getAlignment().getQuantity();
-    
+
     if (cxxRecord)
     {
         ret->IsCppRecord = true;
@@ -642,10 +642,10 @@ enum class PathogenArgPassingKind : int32_t
     Invalid
 };
 
-#define verify_arg_passing_kind(PATHOGEN_KIND, CLANG_KIND) static_assert((int)(PathogenArgPassingKind::PATHOGEN_KIND) == (int)(RecordDecl::CLANG_KIND), #PATHOGEN_KIND " must match " #CLANG_KIND);
-verify_arg_passing_kind(CanPassInRegisters, APK_CanPassInRegs)
-verify_arg_passing_kind(CannotPassInRegisters, APK_CannotPassInRegs)
-verify_arg_passing_kind(CanNeverPassInRegisters, APK_CanNeverPassInRegs)
+#define verify_arg_passing_kind(PATHOGEN_KIND, CLANG_KIND) static_assert((int)(PathogenArgPassingKind::PATHOGEN_KIND) == (int)(RecordArgPassingKind::CLANG_KIND), #PATHOGEN_KIND " must match " #CLANG_KIND);
+verify_arg_passing_kind(CanPassInRegisters, CanPassInRegs)
+verify_arg_passing_kind(CannotPassInRegisters, CannotPassInRegs)
+verify_arg_passing_kind(CanNeverPassInRegisters, CanNeverPassInRegs)
 
 PATHOGEN_EXPORT PathogenArgPassingKind pathogen_getArgPassingRestrictions(CXCursor cursor)
 {
@@ -689,11 +689,11 @@ enum class PathogenStringConstantKind : int
     WideCharBit = 1 << 31,
 };
 PATHOGEN_FLAGS(PathogenStringConstantKind);
-static_assert((int)PathogenStringConstantKind::Ascii == StringLiteral::Ascii, "ASCII string kinds must match.");
-static_assert((int)PathogenStringConstantKind::WideChar == StringLiteral::Wide, "Wide character string kinds must match.");
-static_assert((int)PathogenStringConstantKind::Utf8 == StringLiteral::UTF8, "UTF8 string kinds must match.");
-static_assert((int)PathogenStringConstantKind::Utf16 == StringLiteral::UTF16, "UTF16 string kinds must match.");
-static_assert((int)PathogenStringConstantKind::Utf32 == StringLiteral::UTF32, "UTF32 string kinds must match.");
+static_assert((int)PathogenStringConstantKind::Ascii == (int)CharacterLiteralKind::Ascii, "ASCII string kinds must match.");
+static_assert((int)PathogenStringConstantKind::WideChar == (int)CharacterLiteralKind::Wide, "Wide character string kinds must match.");
+static_assert((int)PathogenStringConstantKind::Utf8 == (int)CharacterLiteralKind::UTF8, "UTF8 string kinds must match.");
+static_assert((int)PathogenStringConstantKind::Utf16 == (int)CharacterLiteralKind::UTF16, "UTF16 string kinds must match.");
+static_assert((int)PathogenStringConstantKind::Utf32 == (int)CharacterLiteralKind::UTF32, "UTF32 string kinds must match.");
 
 struct PathogenConstantString
 {
@@ -1205,7 +1205,7 @@ PATHOGEN_EXPORT CXString pathogen_getTypeSpellingWithPlaceholder(CXType type, co
     SmallString<64> resultStorage;
     llvm::raw_svector_ostream resultOutput(resultStorage);
     PrintingPolicy printingPolicy(cxtu::getASTUnit(translationUnit)->getASTContext().getLangOpts());
-    
+
     qualifiedType.print(resultOutput, printingPolicy, std::string(placeholder, placeholderByteCount));
 
     return cxstring::createDup(resultOutput.str());
@@ -1399,7 +1399,7 @@ CXStringSet* pathogen_IsFunctionCallable(CXTranslationUnit translationUnit, cons
         assert(false && "FunctionDecl should be a FunctionProtoType");
         return pathogen_CreateSingleDiagnosticStringSet("The specified function is not a FunctionProtoType.");
     }
-    
+
     return pathogen_IsFunctionTypeCallable(translationUnit, functionType);
 }
 
@@ -1462,6 +1462,7 @@ PATHOGEN_EXPORT void pathogen_CreateCodeGenerator(CXTranslationUnit translationU
     (
         astUnit->getDiagnostics(),
         "ClangSharp.Pathogen",
+        std::move(createVFSFromCompilerInvocation(invocation, astUnit->getDiagnostics())),
         invocation.getHeaderSearchOpts(),
         invocation.getPreprocessorOpts(),
         invocation.getCodeGenOpts(),
@@ -1486,7 +1487,6 @@ enum class PathogenLlvmCallingConventionKind : uint8_t
     Cold = 9,
     GHC = 10,
     HiPE = 11,
-    WebKit_JS = 12,
     AnyReg = 13,
     PreserveMost = 14,
     PreserveAll = 15,
@@ -1511,8 +1511,6 @@ enum class PathogenLlvmCallingConventionKind : uint8_t
     X86_64_SysV = 78,
     Win64 = 79,
     X86_VectorCall = 80,
-    HHVM = 81,
-    HHVM_C = 82,
     X86_INTR = 83,
     AVR_INTR = 84,
     AVR_SIGNAL = 85,
@@ -1532,6 +1530,14 @@ enum class PathogenLlvmCallingConventionKind : uint8_t
     WASM_EmscriptenInvoke = 99,
     AMDGPU_Gfx = 100,
     M68k_INTR = 101,
+    AArch64_SME_ABI_Support_Routines_PreserveMost_From_X0 = 102,
+    AArch64_SME_ABI_Support_Routines_PreserveMost_From_X2 = 103,
+    AMDGPU_CS_Chain = 104,
+    AMDGPU_CS_ChainPreserve = 105,
+    M68k_RTD = 106,
+    GRAAL = 107,
+    ARM64EC_Thunk_X64 = 108,
+    ARM64EC_Thunk_Native = 109,
 };
 #define verify_llvm_calling_convention_kind(KIND) static_assert((int)(PathogenLlvmCallingConventionKind::KIND) == ((int)llvm::CallingConv::KIND), "LLVM " #KIND " must match Pathogen " #KIND);
 verify_llvm_calling_convention_kind(C);
@@ -1539,7 +1545,6 @@ verify_llvm_calling_convention_kind(Fast);
 verify_llvm_calling_convention_kind(Cold);
 verify_llvm_calling_convention_kind(GHC);
 verify_llvm_calling_convention_kind(HiPE);
-verify_llvm_calling_convention_kind(WebKit_JS);
 verify_llvm_calling_convention_kind(AnyReg);
 verify_llvm_calling_convention_kind(PreserveMost);
 verify_llvm_calling_convention_kind(PreserveAll);
@@ -1564,8 +1569,6 @@ verify_llvm_calling_convention_kind(Intel_OCL_BI);
 verify_llvm_calling_convention_kind(X86_64_SysV);
 verify_llvm_calling_convention_kind(Win64);
 verify_llvm_calling_convention_kind(X86_VectorCall);
-verify_llvm_calling_convention_kind(HHVM);
-verify_llvm_calling_convention_kind(HHVM_C);
 verify_llvm_calling_convention_kind(X86_INTR);
 verify_llvm_calling_convention_kind(AVR_INTR);
 verify_llvm_calling_convention_kind(AVR_SIGNAL);
@@ -1585,6 +1588,14 @@ verify_llvm_calling_convention_kind(AArch64_SVE_VectorCall);
 verify_llvm_calling_convention_kind(WASM_EmscriptenInvoke);
 verify_llvm_calling_convention_kind(AMDGPU_Gfx);
 verify_llvm_calling_convention_kind(M68k_INTR);
+verify_llvm_calling_convention_kind(AArch64_SME_ABI_Support_Routines_PreserveMost_From_X0);
+verify_llvm_calling_convention_kind(AArch64_SME_ABI_Support_Routines_PreserveMost_From_X2);
+verify_llvm_calling_convention_kind(AMDGPU_CS_Chain);
+verify_llvm_calling_convention_kind(AMDGPU_CS_ChainPreserve);
+verify_llvm_calling_convention_kind(M68k_RTD);
+verify_llvm_calling_convention_kind(GRAAL);
+verify_llvm_calling_convention_kind(ARM64EC_Thunk_X64);
+verify_llvm_calling_convention_kind(ARM64EC_Thunk_Native);
 
 enum class PathogenClangCallingConventionKind : uint8_t
 {
@@ -1607,6 +1618,9 @@ enum class PathogenClangCallingConventionKind : uint8_t
     PreserveMost,
     PreserveAll,
     AArch64VectorCall,
+    AArch64SVEPCS,
+    AMDGPUKernelCall,
+    M68kRTD,
 };
 #define verify_clang_calling_convention_kind(PATHOGEN_KIND, CLANG_KIND) static_assert((int)(PathogenClangCallingConventionKind::PATHOGEN_KIND) == ((int)clang::CLANG_KIND), "Clang " #CLANG_KIND " must match Pathogen " #PATHOGEN_KIND);
 verify_clang_calling_convention_kind(C, CC_C);
@@ -1628,6 +1642,9 @@ verify_clang_calling_convention_kind(SwiftAsync, CC_SwiftAsync);
 verify_clang_calling_convention_kind(PreserveMost, CC_PreserveMost);
 verify_clang_calling_convention_kind(PreserveAll, CC_PreserveAll);
 verify_clang_calling_convention_kind(AArch64VectorCall, CC_AArch64VectorCall);
+verify_clang_calling_convention_kind(AArch64SVEPCS, CC_AArch64SVEPCS);
+verify_clang_calling_convention_kind(AMDGPUKernelCall, CC_AMDGPUKernelCall);
+verify_clang_calling_convention_kind(M68kRTD, CC_M68kRTD);
 
 enum class PathogenArrangedFunctionFlags : uint16_t
 {
@@ -1642,6 +1659,8 @@ enum class PathogenArrangedFunctionFlags : uint16_t
     IsVariadic = 128,
     UsesInAlloca = 256,
     HasExtendedParameterInfo = 512,
+    IsDelegateCall = 1024,
+    IsCmseNSCall = 2048,
 };
 PATHOGEN_FLAGS(PathogenArrangedFunctionFlags);
 
@@ -1723,6 +1742,7 @@ struct PathogenArrangedFunction
     uint32_t RequiredArgumentCount;
     uint32_t ArgumentsPassedInRegisterCount;
     uint32_t ArgumentCount;
+    uint32_t MaxVectorWidth;
     PathogenArgumentInfo ReturnInfo;
 };
 
@@ -1763,7 +1783,7 @@ static void pathogen_CreateArgumentInfo(CXTranslationUnit translationUnit, CanQu
             {
                 output->Flags |= PathogenArgumentFlags::IsSignExtended;
             }
-            
+
             output->Extra = info.getDirectOffset();
             break;
         case ABIArgInfo::Indirect:
@@ -1828,6 +1848,7 @@ static PathogenArrangedFunction* pathogen_CreateArrangedFunction(CXTranslationUn
     result->RequiredArgumentCount = function.getNumRequiredArgs();
     result->ArgumentsPassedInRegisterCount = function.getRegParm();
     result->ArgumentCount = (uint32_t)arguments.size();
+    result->MaxVectorWidth = function.getMaxVectorWidth();
     pathogen_CreateArgumentInfo(translationUnit, function.getReturnType(), function.getReturnInfo(), &result->ReturnInfo);
 
     for (size_t i = 0; i < arguments.size(); i++)
@@ -1867,6 +1888,12 @@ static PathogenArrangedFunction* pathogen_CreateArrangedFunction(CXTranslationUn
 
     if (function.getExtParameterInfos().size() > 0)
     { result->Flags |= PathogenArrangedFunctionFlags::HasExtendedParameterInfo; }
+
+    if (function.isDelegateCall())
+    { result->Flags |= PathogenArrangedFunctionFlags::IsDelegateCall; }
+
+    if (function.isCmseNSCall())
+    { result->Flags |= PathogenArrangedFunctionFlags::IsCmseNSCall; }
 
     return result;
 }

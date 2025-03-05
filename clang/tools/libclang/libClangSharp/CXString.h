@@ -1,6 +1,6 @@
 // Copyright (c) .NET Foundation and Contributors. All Rights Reserved. Licensed under the MIT License (MIT). See License.md in the repository root for more information.
 
-// Ported from https://github.com/llvm/llvm-project/tree/llvmorg-14.0.0/clang/tools/libclang
+// Ported from https://github.com/llvm/llvm-project/tree/llvmorg-18.1.3/clang/tools/libclang
 // Original source is Copyright (c) the LLVM Project and Contributors. Licensed under the Apache License v2.0 with LLVM Exceptions. See NOTICE.txt in the project root for license information.
 
 #ifndef LIBCLANGSHARP_CXSTRING_H
@@ -27,8 +27,7 @@ enum CXStringFlag {
     CXS_StringBuf
 };
 
-namespace clang {
-namespace cxstring {
+namespace clang::cxstring {
     /// Create a CXString object from a StringRef.  New CXString will
     /// contain a copy of \p String.
     ///
@@ -43,7 +42,6 @@ namespace cxstring {
     ///
     /// \p String should not be changed by the caller afterwards.
     CXString createRef(const char* String);
-}
 }
 
 #endif

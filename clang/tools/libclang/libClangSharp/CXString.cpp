@@ -1,6 +1,6 @@
 // Copyright (c) .NET Foundation and Contributors. All Rights Reserved. Licensed under the MIT License (MIT). See License.md in the repository root for more information.
 
-// Ported from https://github.com/llvm/llvm-project/tree/llvmorg-14.0.0/clang/tools/libclang
+// Ported from https://github.com/llvm/llvm-project/tree/llvmorg-18.1.3/clang/tools/libclang
 // Original source is Copyright (c) the LLVM Project and Contributors. Licensed under the Apache License v2.0 with LLVM Exceptions. See NOTICE.txt in the project root for license information.
 
 #include "libClangSharp/CXString.h"
@@ -12,7 +12,34 @@
 
 #pragma warning(pop)
 
-namespace clang {
-namespace cxstring {
-}
+namespace clang::cxstring {
+#if 0
+    CXString createDup(llvm::StringRef String) {
+        CXString Result;
+        char* Spelling = static_cast<char*>(llvm::safe_malloc(String.size() + 1));
+        memmove(Spelling, String.data(), String.size());
+        Spelling[String.size()] = 0;
+        Result.data = Spelling;
+        Result.private_flags = (unsigned)CXS_Malloc;
+        return Result;
+    }
+
+    CXString createEmpty() {
+        CXString Str;
+        Str.data = "";
+        Str.private_flags = CXS_Unmanaged;
+        return Str;
+    }
+
+    CXString createRef(const char* String) {
+        if (String && String[0] == '\0') {
+            return createEmpty();
+        }
+
+        CXString Str;
+        Str.data = String;
+        Str.private_flags = CXS_Unmanaged;
+        return Str;
+    }
+#endif
 }
